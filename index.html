@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>송장변환기</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
+:root{
+  --bg:#141414;--sur:#1e1e1e;--sur2:#252525;--sur3:#2e2e2e;
+  --bdr:#333;--bdr2:#444;
+  --tx:#f0ede8;--tx2:#999;--tx3:#666;
+  --gold:#c9a84c;--gold2:#e8c97a;--gold-bg:rgba(201,168,76,0.1);--gold-bdr:rgba(201,168,76,0.3);
+  --blue:#3b82f6;--bl:rgba(59,130,246,0.1);--blb:rgba(59,130,246,0.3);
+  --green:#22c55e;--gl:rgba(34,197,94,0.1);--gb:rgba(34,197,94,0.3);
+  --red:#ef4444;--rl:rgba(239,68,68,0.1);--rb:rgba(239,68,68,0.3);
+  --r:10px;--rs:7px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;font-size:14px;}
+
+/* 헤더 */
+.header{height:52px;background:var(--sur);border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:50;}
+.header-left{display:flex;align-items:center;gap:12px;}
+.header-title{font-size:15px;font-weight:700;letter-spacing:-.3px;}
+.header-title span{color:var(--gold);}
+.tab-bar{display:flex;gap:2px;}
+.tab{padding:6px 14px;border-radius:var(--rs);font-size:12px;font-weight:500;cursor:pointer;color:var(--tx2);transition:all .15s;border:none;background:none;font-family:'Noto Sans KR',sans-serif;}
+.tab:hover{color:var(--tx);background:var(--sur2);}
+.tab.active{color:var(--gold);background:var(--gold-bg);border:1px solid var(--gold-bdr);}
+.header-right{display:flex;gap:8px;}
+
+/* 레이아웃 */
+.layout{display:flex;height:calc(100vh - 52px);}
+.left-panel{flex:1;overflow-y:auto;padding:20px;border-right:1px solid var(--bdr);}
+.right-panel{width:280px;flex-shrink:0;overflow-y:auto;padding:20px;background:var(--sur);}
+
+/* 드롭다운 바 */
+.biz-bar{display:flex;align-items:center;gap:8px;margin-bottom:20px;}
+.biz-select{flex:1;padding:9px 14px;background:var(--sur2);border:1px solid var(--bdr2);border-radius:var(--rs);color:var(--tx);font-size:13px;font-weight:500;font-family:'Noto Sans KR',sans-serif;outline:none;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;}
+.biz-select:focus{border-color:var(--gold);}
+.btn-add-biz{padding:9px 14px;background:var(--gold-bg);border:1px solid var(--gold-bdr);border-radius:var(--rs);color:var(--gold);font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;font-family:'Noto Sans KR',sans-serif;transition:all .15s;}
+.btn-add-biz:hover{background:rgba(201,168,76,0.18);}
+
+/* 플랫폼 섹션 */
+.section-title{font-size:11px;color:var(--tx3);font-weight:500;letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;}
+.pf-list{display:flex;flex-direction:column;gap:10px;margin-bottom:16px;}
+.pf-item{background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--r);overflow:hidden;}
+.pf-item-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--bdr);}
+.pf-item-name{font-size:13px;font-weight:500;display:flex;align-items:center;gap:7px;}
+.pf-dot{width:7px;height:7px;border-radius:50%;background:var(--tx3);}
+.pf-dot.done{background:var(--green);}
+.pf-item-actions{display:flex;gap:5px;}
+.pf-drop{padding:14px;cursor:pointer;transition:all .15s;text-align:center;}
+.pf-drop:hover,.pf-drop.drag{background:rgba(201,168,76,0.06);border-color:var(--gold);}
+.pf-drop-inner{display:flex;flex-direction:column;align-items:center;gap:6px;}
+.pf-drop-icon{width:32px;height:32px;opacity:.35;}
+.pf-drop p{font-size:12px;color:var(--tx2);}
+.pf-drop small{font-size:11px;color:var(--tx3);}
+.pf-done-info{padding:12px 14px;display:flex;align-items:center;gap:10px;}
+.pf-done-icon{width:32px;height:32px;background:var(--gl);border-radius:var(--rs);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.pf-done-icon svg{width:16px;height:16px;color:var(--green);}
+.pf-done-text{flex:1;}
+.pf-done-name{font-size:12px;font-weight:500;color:var(--green);}
+.pf-done-count{font-size:11px;color:var(--tx2);margin-top:1px;}
+.pf-done-clear{cursor:pointer;color:var(--tx3);font-size:16px;line-height:1;padding:2px;}.pf-done-clear:hover{color:var(--red);}
+
+/* 통합 엑셀 */
+.unified-section{background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--r);overflow:hidden;margin-bottom:8px;}
+.unified-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--bdr);}
+.unified-label{font-size:13px;font-weight:500;display:flex;align-items:center;gap:7px;}
+.tag{font-size:10px;padding:2px 6px;border-radius:4px;background:var(--sur3);color:var(--tx2);border:1px solid var(--bdr);}
+
+/* 오른쪽 패널 */
+.rp-section{margin-bottom:20px;}
+.rp-title{font-size:11px;color:var(--tx3);font-weight:500;letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px;}
+.courier-list{display:flex;flex-direction:column;gap:6px;}
+.courier-item{padding:9px 12px;background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--rs);cursor:pointer;transition:all .15s;font-size:13px;font-weight:500;display:flex;align-items:center;justify-content:space-between;}
+.courier-item:hover{border-color:var(--green);}
+.courier-item.on{border-color:var(--green);background:var(--gl);color:var(--green);}
+.courier-item.on .courier-check{opacity:1;}
+.courier-check{width:16px;height:16px;opacity:0;color:var(--green);}
+
+/* 합산 */
+.summary-box{background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--rs);padding:12px;margin-bottom:12px;}
+.sum-row{display:flex;justify-content:space-between;font-size:12px;color:var(--tx2);padding:3px 0;}
+.sum-total{display:flex;justify-content:space-between;font-size:14px;font-weight:700;color:var(--gold);border-top:1px solid var(--bdr);margin-top:6px;padding-top:8px;}
+.sum-empty{font-size:12px;color:var(--tx3);text-align:center;padding:8px 0;}
+
+/* 버튼 */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border-radius:var(--rs);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;border:1px solid var(--bdr2);background:var(--sur2);color:var(--tx);font-family:'Noto Sans KR',sans-serif;}
+.btn:hover{background:var(--sur3);}
+.btn svg{width:13px;height:13px;}
+.btn-gold{background:var(--gold);color:#1a1200;border-color:var(--gold);font-weight:700;}.btn-gold:hover{background:var(--gold2);}
+.btn-green{background:var(--green);color:#001a08;border-color:var(--green);font-weight:700;}.btn-green:hover{background:#16a34a;}
+.btn-danger{color:var(--red);border-color:var(--rb);background:var(--rl);}.btn-danger:hover{opacity:.8;}
+.btn-ghost{color:var(--tx3);border-color:var(--bdr);background:transparent;font-size:11px;padding:5px 10px;}
+.btn-ghost:hover{color:var(--tx);background:var(--sur2);}
+.btn-full{width:100%;justify-content:center;padding:11px;}
+.btn-sm{padding:4px 9px;font-size:11px;}
+
+/* 결과 */
+.result-list{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;}
+.result-row{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--gl);border:1px solid var(--gb);border-radius:var(--rs);}
+.result-info{flex:1;}
+.result-name{font-size:11px;font-weight:500;color:var(--green);word-break:break-all;}
+.result-count{font-size:10px;color:var(--tx2);margin-top:1px;}
+.result-zip{display:flex;justify-content:flex-end;}
+
+/* 배지 */
+.badge{display:inline-flex;align-items:center;padding:2px 6px;border-radius:6px;font-size:10px;font-weight:500;}
+.badge-gold{background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-bdr);}
+.badge-green{background:var(--gl);color:var(--green);border:1px solid var(--gb);}
+.badge-blue{background:var(--bl);color:var(--blue);border:1px solid var(--blb);}
+.badge-gray{background:var(--sur3);color:var(--tx2);border:1px solid var(--bdr);}
+
+/* 모달 */
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:100;}
+.modal-ov.open{display:flex;}
+.modal{background:var(--sur);border:1px solid var(--bdr2);border-radius:var(--r);padding:24px;width:540px;max-width:92vw;max-height:88vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.5);}
+.mh{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
+.mh h2{font-size:15px;font-weight:700;}
+.mc{cursor:pointer;color:var(--tx3);font-size:22px;line-height:1;padding:2px;}.mc:hover{color:var(--tx);}
+label.lbl{font-size:12px;color:var(--tx2);display:block;margin-bottom:5px;}
+input[type=text]{width:100%;padding:8px 12px;background:var(--sur2);border:1px solid var(--bdr2);border-radius:var(--rs);font-size:13px;font-family:'Noto Sans KR',sans-serif;color:var(--tx);outline:none;transition:border-color .15s;}
+input[type=text]:focus{border-color:var(--gold);}
+.upload-zone{border:1.5px dashed var(--bdr2);border-radius:var(--rs);padding:16px;text-align:center;cursor:pointer;transition:all .15s;background:var(--sur2);}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--gold);background:var(--gold-bg);}
+.upload-zone svg{width:22px;height:22px;color:var(--tx3);margin:0 auto 6px;display:block;}
+.upload-zone p{font-size:12px;color:var(--tx2);}
+.upload-zone small{font-size:11px;color:var(--tx3);}
+.file-done-sm{display:flex;align-items:center;gap:7px;padding:7px 10px;background:var(--gl);border:1px solid var(--gb);border-radius:var(--rs);font-size:12px;color:var(--green);margin-top:6px;}
+.file-done-sm svg{width:14px;height:14px;flex-shrink:0;}
+.mt{width:100%;border-collapse:collapse;}
+.mt th{font-size:11px;font-weight:500;color:var(--tx3);padding:6px 10px;text-align:left;background:var(--sur2);border:1px solid var(--bdr);}
+.mt td{padding:5px 8px;border:1px solid var(--bdr);font-size:12px;}
+.mt select{width:100%;border:none;background:none;font-size:12px;font-family:'Noto Sans KR',sans-serif;color:var(--tx);cursor:pointer;outline:none;}
+.mt select option{background:var(--sur2);}
+.divider{height:1px;background:var(--bdr);margin:14px 0;}
+.empty-state{text-align:center;padding:40px 20px;color:var(--tx3);}
+.empty-state svg{width:36px;height:36px;margin:0 auto 12px;display:block;opacity:.25;}
+.empty-state p{font-size:13px;}
+.empty-state small{font-size:11px;color:var(--tx3);margin-top:4px;display:block;}
+
+/* 설정 페이지 */
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.settings-card{background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);padding:18px;}
+.settings-card-title{font-size:13px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;}
+.item-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bdr);font-size:13px;}
+.item-row:last-child{border-bottom:none;}
+.item-actions{display:flex;gap:5px;}
+
+/* 탭 콘텐츠 */
+.tab-content{display:none;height:100%;}
+.tab-content.active{display:flex;}
+.settings-page{display:none;padding:24px;}
+.settings-page.active{display:block;}
+
+/* 토스트 */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--sur2);border:1px solid var(--bdr2);color:var(--tx);padding:11px 16px;border-radius:var(--rs);font-size:13px;z-index:200;opacity:0;transform:translateY(6px);transition:all .2s;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.3);}
+.toast.show{opacity:1;transform:translateY(0);}
+.toast.ok{border-color:var(--gb);color:var(--green);}
+.toast.err{border-color:var(--rb);color:var(--red);}
+
+/* 스크롤바 */
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:3px;}
+
+/* 모달 select */
+select.modal-sel{width:100%;padding:7px 10px;background:var(--sur2);border:1px solid var(--bdr2);border-radius:var(--rs);font-size:12px;font-family:'Noto Sans KR',sans-serif;color:var(--tx);outline:none;}
+select.modal-sel option{background:var(--sur2);}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="header-title"><span>송장</span>변환기</div>
+    <div class="tab-bar">
+      <button class="tab active" onclick="switchTab('work',this)">주문 → 택배</button>
+      <button class="tab" onclick="switchTab('invoice',this)">송장 → 플랫폼</button>
+      <button class="tab" onclick="switchTab('settings',this)">설정</button>
+    </div>
+  </div>
+</div>
+
+<!-- 주문→택배 탭 -->
+<div id="tab-work" class="tab-content active">
+  <div class="left-panel">
+    <!-- 사업자 바 -->
+    <div class="biz-bar">
+      <select class="biz-select" id="w-biz-sel" onchange="onBizChange('w')">
+        <option value="">사업자 선택...</option>
+      </select>
+      <button class="btn-add-biz" onclick="openModal('m-add-biz')">+ 사업자 추가</button>
+    </div>
+
+    <div id="w-pf-area">
+      <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>
+        <p>사업자를 선택하세요</p>
+        <small>플랫폼 업로드 목록이 표시됩니다</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <div class="rp-section">
+      <div class="rp-title">택배사 선택</div>
+      <div class="courier-list" id="w-courier-list">
+        <div style="font-size:12px;color:var(--tx3)">사업자를 먼저 선택하세요</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="rp-section">
+      <div class="rp-title">합산 미리보기</div>
+      <div id="w-summary"><div class="sum-empty">업로드 후 표시됩니다</div></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <button class="btn btn-gold btn-full" onclick="convertWork()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
+      변환 · 다운로드
+    </button>
+  </div>
+</div>
+
+<!-- 송장→플랫폼 탭 -->
+<div id="tab-invoice" class="tab-content">
+  <div class="left-panel">
+    <div class="biz-bar">
+      <select class="biz-select" id="i-biz-sel" onchange="onBizChange('i')">
+        <option value="">사업자 선택...</option>
+      </select>
+      <button class="btn-add-biz" onclick="openModal('m-add-biz')">+ 사업자 추가</button>
+    </div>
+
+    <div class="rp-section" style="margin-bottom:16px">
+      <div class="section-title">택배사 선택</div>
+      <div class="courier-list" id="i-courier-list" style="flex-direction:row;flex-wrap:wrap;gap:6px;display:flex">
+        <div style="font-size:12px;color:var(--tx3)">사업자를 먼저 선택하세요</div>
+      </div>
+    </div>
+
+    <div class="section-title" style="margin-bottom:10px">송장 엑셀 업로드</div>
+    <div class="upload-zone" id="i-drop-zone" onclick="document.getElementById('i-file').click()"
+      ondragover="ev.preventDefault();this.classList.add('drag')"
+      ondragleave="this.classList.remove('drag')"
+      ondrop="handleDrop(event,'i-file-handler')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+      <p>송장번호 입력된 택배사 엑셀</p>
+      <small>드래그하거나 클릭해서 선택</small>
+    </div>
+    <input type="file" id="i-file" accept=".xlsx,.xls" style="display:none" onchange="handleInvFile(this)">
+    <div id="i-file-result"></div>
+  </div>
+
+  <div class="right-panel">
+    <div class="rp-section">
+      <div class="rp-title">변환 결과</div>
+      <div id="i-results"><div class="sum-empty">변환 후 표시됩니다</div></div>
+    </div>
+    <div class="divider"></div>
+    <button class="btn btn-gold btn-full" onclick="convertInvoice()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
+      플랫폼별 분리 · 다운로드
+    </button>
+  </div>
+</div>
+
+<!-- 설정 탭 -->
+<div id="tab-settings" class="tab-content" style="display:none">
+  <div style="flex:1;overflow-y:auto;padding:24px;">
+    <div style="max-width:900px;margin:0 auto;">
+      <div class="settings-grid">
+        <div class="settings-card">
+          <div class="settings-card-title">
+            플랫폼 관리
+            <button class="btn btn-sm" onclick="openAddPlatform()">+ 추가</button>
+          </div>
+          <div id="pf-settings-list"></div>
+        </div>
+        <div class="settings-card">
+          <div class="settings-card-title">
+            택배사 관리
+            <button class="btn btn-sm" onclick="openAddCourier()">+ 추가</button>
+          </div>
+          <div id="cr-settings-list"></div>
+        </div>
+      </div>
+
+      <div class="settings-card" style="margin-top:16px">
+        <div class="settings-card-title">사업자 관리</div>
+        <div id="biz-settings-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 모달: 사업자 추가 -->
+<div class="modal-ov" id="m-add-biz">
+  <div class="modal">
+    <div class="mh"><h2>사업자 추가</h2><span class="mc" onclick="closeModal('m-add-biz')">×</span></div>
+    <label class="lbl">사업자명</label>
+    <input type="text" id="new-biz-name" placeholder="예: 소울스토어">
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="closeModal('m-add-biz')">취소</button>
+      <button class="btn btn-gold" onclick="addBiz()">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- 모달: 플랫폼 추가/수정 -->
+<div class="modal-ov" id="m-platform">
+  <div class="modal">
+    <div class="mh"><h2 id="m-pf-title">플랫폼 추가</h2><span class="mc" onclick="closeModal('m-platform')">×</span></div>
+    <label class="lbl" style="margin-bottom:5px">플랫폼명</label>
+    <input type="text" id="pf-name" placeholder="예: 스마트스토어" style="margin-bottom:14px">
+    <label class="lbl">주문 양식 샘플 엑셀 <span style="color:var(--tx3);font-size:11px">(헤더 행만 있어도 됩니다)</span></label>
+    <div class="upload-zone" onclick="document.getElementById('pf-sample').click()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+      <p>샘플 엑셀 업로드</p>
+    </div>
+    <input type="file" id="pf-sample" accept=".xlsx,.xls" style="display:none" onchange="loadPfSample(this)">
+    <div id="pf-sample-res"></div>
+    <div id="pf-map-sec" style="display:none;margin-top:14px">
+      <div style="font-size:12px;font-weight:500;margin-bottom:6px;color:var(--tx2)">컬럼 매핑 <span style="font-size:11px;font-weight:400;color:var(--tx3)">— 플랫폼 컬럼 → 표준 필드</span></div>
+      <table class="mt" id="pf-map-table"></table>
+      <div style="margin-top:12px">
+        <label class="lbl">플랫폼 구분 컬럼 <span style="color:var(--tx3);font-size:11px">(통합 엑셀에서 플랫폼명이 담긴 컬럼, 선택사항)</span></label>
+        <select id="pf-channel-col" class="modal-sel"></select>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
+      <button class="btn" onclick="closeModal('m-platform')">취소</button>
+      <button class="btn btn-gold" onclick="savePlatform()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 모달: 택배사 추가/수정 -->
+<div class="modal-ov" id="m-courier">
+  <div class="modal">
+    <div class="mh"><h2 id="m-cr-title">택배사 추가</h2><span class="mc" onclick="closeModal('m-courier')">×</span></div>
+    <label class="lbl" style="margin-bottom:5px">택배사명</label>
+    <input type="text" id="cr-name" placeholder="예: CJ대한통운" style="margin-bottom:14px">
+    <label class="lbl">택배사 양식 샘플 엑셀</label>
+    <div class="upload-zone" onclick="document.getElementById('cr-sample').click()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+      <p>샘플 엑셀 업로드</p>
+    </div>
+    <input type="file" id="cr-sample" accept=".xlsx,.xls" style="display:none" onchange="loadCrSample(this)">
+    <div id="cr-sample-res"></div>
+    <div id="cr-map-sec" style="display:none;margin-top:14px">
+      <div style="font-size:12px;font-weight:500;margin-bottom:6px;color:var(--tx2)">컬럼 매핑 <span style="font-size:11px;font-weight:400;color:var(--tx3)">— 표준 필드 → 택배사 컬럼</span></div>
+      <table class="mt" id="cr-map-table"></table>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
+      <button class="btn" onclick="closeModal('m-courier')">취소</button>
+      <button class="btn btn-gold" onclick="saveCourier()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 모달: 사업자 설정 -->
+<div class="modal-ov" id="m-biz-settings">
+  <div class="modal">
+    <div class="mh"><h2 id="m-bs-title">사업자 설정</h2><span class="mc" onclick="closeModal('m-biz-settings')">×</span></div>
+    <div id="m-bs-body"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="closeModal('m-biz-settings')">닫기</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STD = [
+  {k:'order_no',l:'주문번호'},{k:'receiver',l:'수취인'},{k:'phone',l:'연락처'},
+  {k:'phone2',l:'연락처2'},{k:'address',l:'주소'},{k:'address_detail',l:'상세주소'},
+  {k:'zipcode',l:'우편번호'},{k:'product_name',l:'상품명'},{k:'product_option',l:'옵션'},
+  {k:'quantity',l:'수량'},{k:'memo',l:'배송메모'},{k:'invoice_no',l:'송장번호'},
+  {k:'platform',l:'플랫폼구분'},
+];
+
+let DB = (() => {
+  try { return JSON.parse(localStorage.getItem('icdb2')||'null') || dfDB(); } catch(e) { return dfDB(); }
+})();
+
+function dfDB() {
+  return {
+    businesses:[
+      {id:'b1',name:'소울스토어',platforms:[],couriers:[]},
+      {id:'b2',name:'제이원투몰',platforms:[],couriers:[]},
+      {id:'b3',name:'행복산업',platforms:[],couriers:[]},
+      {id:'b4',name:'태실장픽앤샵',platforms:[],couriers:[]},
+    ],
+    platforms:[], couriers:[]
+  };
+}
+function save() { localStorage.setItem('icdb2', JSON.stringify(DB)); }
+
+// 탭
+function switchTab(name, el) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c=>c.style.display='none');
+  el.classList.add('active');
+  const tc = document.getElementById('tab-'+name);
+  tc.style.display = 'flex';
+  if(name==='settings') { tc.style.display='block'; renderSettings(); }
+  if(name==='work') renderWorkBizBar();
+  if(name==='invoice') renderInvBizBar();
+}
+
+// ── 주문→택배 ──
+let W = { bizId:null, courierId:null, pfFiles:{}, unifiedData:null, unifiedHeaders:null };
+
+function renderWorkBizBar() {
+  const sel = document.getElementById('w-biz-sel');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">사업자 선택...</option>' +
+    DB.businesses.map(b=>`<option value="${b.id}" ${b.id===W.bizId?'selected':''}>${b.name}</option>`).join('');
+  renderWorkPfArea();
+  renderWorkCouriers();
+}
+
+function onBizChange(prefix) {
+  const id = document.getElementById(prefix+'-biz-sel').value;
+  if(prefix==='w') { W.bizId=id; W.courierId=null; W.pfFiles={}; W.unifiedData=null; W.unifiedHeaders=null; renderWorkPfArea(); renderWorkCouriers(); renderWSummary(); }
+  if(prefix==='i') { I.bizId=id; I.courierId=null; I.data=null; I.headers=null; renderInvCouriers(); document.getElementById('i-file-result').innerHTML=''; document.getElementById('i-results').innerHTML='<div class="sum-empty">변환 후 표시됩니다</div>'; }
+}
+
+function renderWorkCouriers() {
+  const biz = DB.businesses.find(b=>b.id===W.bizId);
+  const el = document.getElementById('w-courier-list');
+  if(!biz) { el.innerHTML='<div style="font-size:12px;color:var(--tx3)">사업자를 먼저 선택하세요</div>'; return; }
+  const couriers = DB.couriers.filter(c=>biz.couriers.includes(c.id));
+  el.innerHTML = couriers.length
+    ? couriers.map(c=>`
+      <div class="courier-item ${W.courierId===c.id?'on':''}" onclick="selCourier('w','${c.id}')">
+        ${c.name}
+        <svg class="courier-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>`).join('')
+    : '<div style="font-size:12px;color:var(--tx3)">연결된 택배사 없음<br><span style="font-size:11px">설정에서 연결하세요</span></div>';
+}
+
+function selCourier(prefix, id) {
+  if(prefix==='w') W.courierId = W.courierId===id ? null : id;
+  if(prefix==='i') I.courierId = I.courierId===id ? null : id;
+  if(prefix==='w') renderWorkCouriers();
+  if(prefix==='i') renderInvCouriers();
+}
+
+function renderWorkPfArea() {
+  const biz = DB.businesses.find(b=>b.id===W.bizId);
+  const el = document.getElementById('w-pf-area');
+  if(!biz) {
+    el.innerHTML=`<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg><p>사업자를 선택하세요</p><small>플랫폼 업로드 목록이 표시됩니다</small></div>`;
+    return;
+  }
+  const platforms = DB.platforms.filter(p=>biz.platforms.includes(p.id));
+  if(!platforms.length) {
+    el.innerHTML=`<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg><p>연결된 플랫폼이 없습니다</p><small>설정 탭에서 플랫폼을 추가하고 사업자에 연결하세요</small></div>`;
+    return;
+  }
+  const pfHTML = platforms.map(p => {
+    const fd = W.pfFiles[p.id];
+    return `<div class="pf-item" id="pfi-${p.id}">
+      <div class="pf-item-header">
+        <div class="pf-item-name">
+          <div class="pf-dot ${fd?'done':''}"></div>
+          ${p.name}
+          ${fd ? `<span class="badge badge-green">${fd.count}건</span>` : '<span class="badge badge-gray">미업로드</span>'}
+        </div>
+        <div class="pf-item-actions">
+          ${fd ? `<button class="btn btn-sm btn-danger" onclick="clearPfFile('${p.id}')">×</button>` : ''}
+        </div>
+      </div>
+      ${fd
+        ? `<div class="pf-done-info">
+            <div class="pf-done-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+            <div class="pf-done-text"><div class="pf-done-name">${fd.name}</div><div class="pf-done-count">${fd.count}건 인식됨</div></div>
+          </div>`
+        : `<div class="pf-drop" id="drop-${p.id}"
+            onclick="document.getElementById('pf-file-${p.id}').click()"
+            ondragover="event.preventDefault();this.classList.add('drag')"
+            ondragleave="this.classList.remove('drag')"
+            ondrop="handlePfDrop(event,'${p.id}')">
+            <div class="pf-drop-inner">
+              <img class="pf-drop-icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c9a84c' stroke-width='1.5'%3E%3Cpath d='M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z'/%3E%3C/svg%3E">
+              <p>이 파일을 <strong>드래그</strong>하거나 클릭해서 선택</p>
+              <small>.xlsx / .xls</small>
+            </div>
+          </div>
+          <input type="file" id="pf-file-${p.id}" accept=".xlsx,.xls" style="display:none" onchange="handlePfFile(this,'${p.id}')">`
+      }
+    </div>`;
+  }).join('');
+
+  const unifiedFd = W.unifiedData;
+  const unifiedHTML = `<div class="unified-section">
+    <div class="unified-header">
+      <div class="unified-label">
+        <div class="pf-dot ${unifiedFd?'done':''}"></div>
+        통합 엑셀
+        <span class="tag">카페24 등</span>
+        ${unifiedFd ? `<span class="badge badge-green">${W.unifiedData.length}건</span>` : ''}
+      </div>
+      ${unifiedFd ? `<button class="btn btn-sm btn-danger" onclick="clearUnified()">×</button>` : ''}
+    </div>
+    ${unifiedFd
+      ? `<div class="pf-done-info"><div class="pf-done-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div class="pf-done-text"><div class="pf-done-name">${W.unifiedName}</div><div class="pf-done-count">${W.unifiedData.length}건 인식됨</div></div></div>`
+      : `<div class="pf-drop"
+          onclick="document.getElementById('w-unified-input').click()"
+          ondragover="event.preventDefault();this.classList.add('drag')"
+          ondragleave="this.classList.remove('drag')"
+          ondrop="handleUnifiedDrop(event)">
+          <div class="pf-drop-inner">
+            <img class="pf-drop-icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c9a84c' stroke-width='1.5'%3E%3Cpath d='M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z'/%3E%3C/svg%3E">
+            <p>통합 주문 엑셀 드래그 or 클릭</p>
+            <small>선택사항 · .xlsx / .xls</small>
+          </div>
+        </div>
+        <input type="file" id="w-unified-input" accept=".xlsx,.xls" style="display:none" onchange="handleUnified(this)">`
+    }
+  </div>`;
+
+  el.innerHTML = `<div style="margin-bottom:8px" class="section-title">플랫폼별 주문 업로드 <button class="btn btn-sm" onclick="openAddPlatformAndLink('${biz.id}')">+ 플랫폼 추가</button></div>
+    <div class="pf-list">${pfHTML}</div>
+    ${unifiedHTML}`;
+}
+
+function clearPfFile(pfId) { delete W.pfFiles[pfId]; renderWorkPfArea(); renderWSummary(); }
+function clearUnified() { W.unifiedData=null; W.unifiedHeaders=null; W.unifiedName=null; renderWorkPfArea(); renderWSummary(); }
+
+function handlePfDrop(event, pfId) {
+  event.preventDefault();
+  document.getElementById('drop-'+pfId)?.classList.remove('drag');
+  const file = event.dataTransfer.files[0];
+  if(file) processFileForPf(file, pfId);
+}
+function handlePfFile(input, pfId) {
+  if(input.files[0]) processFileForPf(input.files[0], pfId);
+}
+function processFileForPf(file, pfId) {
+  readXlsx(file, (headers, data) => {
+    W.pfFiles[pfId] = {name:file.name, headers, data, count:data.length};
+    renderWorkPfArea(); renderWSummary();
+  });
+}
+function handleUnifiedDrop(event) {
+  event.preventDefault();
+  const file = event.dataTransfer.files[0];
+  if(file) processUnified(file);
+}
+function handleUnified(input) { if(input.files[0]) processUnified(input.files[0]); }
+function processUnified(file) {
+  readXlsx(file, (headers, data) => {
+    W.unifiedHeaders=headers; W.unifiedData=data; W.unifiedName=file.name;
+    renderWorkPfArea(); renderWSummary();
+  });
+}
+
+function renderWSummary() {
+  const biz = DB.businesses.find(b=>b.id===W.bizId);
+  const platforms = biz ? DB.platforms.filter(p=>biz.platforms.includes(p.id)) : [];
+  let rows='', total=0;
+  platforms.forEach(p => {
+    const fd = W.pfFiles[p.id];
+    if(fd) { rows+=`<div class="sum-row"><span>${p.name}</span><span>${fd.count}건</span></div>`; total+=fd.count; }
+  });
+  if(W.unifiedData) { rows+=`<div class="sum-row"><span>통합 엑셀</span><span>${W.unifiedData.length}건</span></div>`; total+=W.unifiedData.length; }
+  document.getElementById('w-summary').innerHTML = total>0
+    ? `<div class="summary-box">${rows}<div class="sum-total"><span>합산</span><span>총 ${total}건</span></div></div>`
+    : '<div class="sum-empty">업로드 후 표시됩니다</div>';
+}
+
+function convertWork() {
+  if(!W.bizId) return toast('사업자를 선택하세요','err');
+  if(!W.courierId) return toast('택배사를 선택하세요','err');
+  const biz = DB.businesses.find(b=>b.id===W.bizId);
+  const courier = DB.couriers.find(c=>c.id===W.courierId);
+  if(!courier?.mapping) return toast('택배사 컬럼 매핑을 설정하세요','err');
+  const platforms = DB.platforms.filter(p=>biz.platforms.includes(p.id));
+  const allRows = [];
+
+  platforms.forEach(p => {
+    const fd = W.pfFiles[p.id];
+    if(!fd||!p.mapping) return;
+    const ci = {}; fd.headers.forEach((h,i)=>ci[h]=i);
+    fd.data.forEach(row => {
+      const std = extractStd(row, ci, p.mapping);
+      std.platform = std.platform || p.name;
+      allRows.push(std);
+    });
+  });
+  if(W.unifiedData && W.unifiedHeaders) {
+    const ci = {}; W.unifiedHeaders.forEach((h,i)=>ci[h]=i);
+    const chPf = platforms.find(p=>p.channelCol && W.unifiedHeaders.includes(p.channelCol));
+    const fallPf = platforms[0];
+    W.unifiedData.forEach(row => {
+      const pf = chPf || fallPf;
+      if(!pf?.mapping) return;
+      const std = extractStd(row, ci, pf.mapping);
+      std.platform = chPf ? (row[ci[chPf.channelCol]]||'통합') : '통합';
+      allRows.push(std);
+    });
+  }
+  if(!allRows.length) return toast('업로드된 파일이 없습니다','err');
+  const crHeaders = courier.columns;
+  const outRows = allRows.map(std => crHeaders.map(ch => {
+    const key = Object.entries(courier.mapping).find(([k,v])=>v===ch)?.[0];
+    return key ? (std[key]??'') : '';
+  }));
+  const filename = `${courier.name}_${biz.name}_${today()}.xlsx`;
+  dlXlsx([crHeaders,...outRows], filename);
+  toast(filename+' 다운로드!','ok');
+}
+
+// ── 송장→플랫폼 ──
+let I = { bizId:null, courierId:null, headers:null, data:null };
+
+function renderInvBizBar() {
+  const sel = document.getElementById('i-biz-sel');
+  sel.innerHTML = '<option value="">사업자 선택...</option>' +
+    DB.businesses.map(b=>`<option value="${b.id}" ${b.id===I.bizId?'selected':''}>${b.name}</option>`).join('');
+  renderInvCouriers();
+}
+
+function renderInvCouriers() {
+  const biz = DB.businesses.find(b=>b.id===I.bizId);
+  const el = document.getElementById('i-courier-list');
+  if(!biz) { el.innerHTML='<div style="font-size:12px;color:var(--tx3)">사업자를 먼저 선택하세요</div>'; return; }
+  const couriers = DB.couriers.filter(c=>biz.couriers.includes(c.id));
+  el.innerHTML = couriers.length
+    ? couriers.map(c=>`<div class="courier-item ${I.courierId===c.id?'on':''}" onclick="selCourier('i','${c.id}')" style="flex:none">${c.name}<svg class="courier-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>`).join('')
+    : '<div style="font-size:12px;color:var(--tx3)">연결된 택배사 없음</div>';
+}
+
+function handleInvFile(input) { if(input.files[0]) processInvFile(input.files[0]); }
+function processInvFile(file) {
+  readXlsx(file, (headers,data) => {
+    I.headers=headers; I.data=data;
+    document.getElementById('i-file-result').innerHTML =
+      `<div class="file-done-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>${file.name} · ${data.length}건</div>`;
+  });
+}
+
+function convertInvoice() {
+  if(!I.bizId) return toast('사업자를 선택하세요','err');
+  if(!I.courierId) return toast('택배사를 선택하세요','err');
+  if(!I.data) return toast('송장 엑셀을 업로드하세요','err');
+  const biz = DB.businesses.find(b=>b.id===I.bizId);
+  const courier = DB.couriers.find(c=>c.id===I.courierId);
+  if(!courier?.mapping) return toast('택배사 컬럼 매핑을 설정하세요','err');
+  const ci = {}; I.headers.forEach((h,i)=>ci[h]=i);
+  const stdRows = I.data.map(row => extractStd(row, ci, courier.mapping));
+  const platforms = DB.platforms.filter(p=>biz.platforms.includes(p.id));
+  const grouped = {};
+  stdRows.forEach(std => {
+    const pfName = std.platform||'기타';
+    if(!grouped[pfName]) grouped[pfName]=[];
+    grouped[pfName].push(std);
+  });
+  if(!Object.keys(grouped).length) return toast('데이터가 없습니다','err');
+  const date = today();
+  const resultFiles = [];
+  const rows = Object.entries(grouped).map(([pfName, stdList]) => {
+    const pf = platforms.find(p=>p.name===pfName)||platforms[0];
+    const pfHeaders = pf?.columns||STD.map(s=>s.l);
+    const outRows = stdList.map(std => pfHeaders.map(ph => {
+      const key = pf?.mapping ? Object.entries(pf.mapping).find(([k,v])=>v===ph)?.[0] : null;
+      return key ? (std[key]??'') : '';
+    }));
+    const filename = `${pfName}_송장_${biz.name}_${date}.xlsx`;
+    resultFiles.push({filename, sheetData:[pfHeaders,...outRows]});
+    return `<div class="result-row">
+      <div class="result-info">
+        <div class="result-name">${filename}</div>
+        <div class="result-count">${stdList.length}건</div>
+      </div>
+      <button class="btn btn-green btn-sm" onclick="dlXlsx(window._rf['${filename}'],'${filename}')">↓</button>
+    </div>`;
+  });
+  window._rf = {};
+  resultFiles.forEach(f => window._rf[f.filename] = f.sheetData);
+  window._invResultFiles = resultFiles;
+  document.getElementById('i-results').innerHTML =
+    `<div class="result-list">${rows.join('')}</div>
+     <div class="result-zip" style="margin-top:6px">
+       <button class="btn btn-ghost" onclick="dlZip()">↓ 전체 ZIP 다운로드</button>
+     </div>`;
+  toast('변환 완료!','ok');
+}
+
+async function dlZip() {
+  const files = window._invResultFiles; if(!files?.length) return;
+  const zip = new JSZip();
+  files.forEach(f => {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(f.sheetData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+    zip.file(f.filename, XLSX.write(wb,{bookType:'xlsx',type:'array'}));
+  });
+  const blob = await zip.generateAsync({type:'blob'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`송장_${today()}.zip`; a.click();
+  toast('ZIP 다운로드!','ok');
+}
+
+// ── 설정 ──
+function renderSettings() {
+  // 플랫폼
+  const pl = document.getElementById('pf-settings-list');
+  pl.innerHTML = DB.platforms.length ? DB.platforms.map(p=>`
+    <div class="item-row">
+      <div>
+        <span style="font-size:13px;font-weight:500">${p.name}</span>
+        ${p.mapping?'<span class="badge badge-green" style="margin-left:6px">매핑완료</span>':'<span class="badge" style="margin-left:6px;background:var(--sur3);color:var(--tx2);border:1px solid var(--bdr)">매핑필요</span>'}
+      </div>
+      <div class="item-actions">
+        <button class="btn btn-sm" onclick="openEditPlatform('${p.id}')">수정</button>
+        <button class="btn btn-sm btn-danger" onclick="delPlatform('${p.id}')">삭제</button>
+      </div>
+    </div>`).join('')
+    : '<div style="font-size:12px;color:var(--tx3);padding:8px 0">등록된 플랫폼 없음</div>';
+
+  // 택배사
+  const cl = document.getElementById('cr-settings-list');
+  cl.innerHTML = DB.couriers.length ? DB.couriers.map(c=>`
+    <div class="item-row">
+      <div>
+        <span style="font-size:13px;font-weight:500">${c.name}</span>
+        ${c.mapping?'<span class="badge badge-green" style="margin-left:6px">매핑완료</span>':'<span class="badge" style="margin-left:6px;background:var(--sur3);color:var(--tx2);border:1px solid var(--bdr)">매핑필요</span>'}
+      </div>
+      <div class="item-actions">
+        <button class="btn btn-sm" onclick="openEditCourier('${c.id}')">수정</button>
+        <button class="btn btn-sm btn-danger" onclick="delCourier('${c.id}')">삭제</button>
+      </div>
+    </div>`).join('')
+    : '<div style="font-size:12px;color:var(--tx3);padding:8px 0">등록된 택배사 없음</div>';
+
+  // 사업자
+  const bl = document.getElementById('biz-settings-list');
+  bl.innerHTML = DB.businesses.map(b => {
+    const pfs = DB.platforms.filter(p=>b.platforms.includes(p.id));
+    const crs = DB.couriers.filter(c=>b.couriers.includes(c.id));
+    return `<div class="item-row" style="align-items:flex-start;padding:12px 0">
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:500;margin-bottom:6px">${b.name}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px">
+          ${pfs.map(p=>`<span class="badge badge-blue">${p.name}<span style="cursor:pointer;margin-left:3px;opacity:.6" onclick="unlinkItem('${b.id}','platform','${p.id}')">×</span></span>`).join('')}
+          <button class="btn btn-sm" onclick="openLinkModal('${b.id}','platform')" style="font-size:10px;padding:2px 7px">+ 플랫폼</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          ${crs.map(c=>`<span class="badge badge-green">${c.name}<span style="cursor:pointer;margin-left:3px;opacity:.6" onclick="unlinkItem('${b.id}','courier','${c.id}')">×</span></span>`).join('')}
+          <button class="btn btn-sm" onclick="openLinkModal('${b.id}','courier')" style="font-size:10px;padding:2px 7px">+ 택배사</button>
+        </div>
+      </div>
+      <button class="btn btn-sm btn-danger" onclick="delBiz('${b.id}')">삭제</button>
+    </div>`;
+  }).join('') + `<div style="margin-top:10px"><button class="btn" onclick="openModal('m-add-biz')">+ 사업자 추가</button></div>`;
+}
+
+// 사업자
+function addBiz() {
+  const name = document.getElementById('new-biz-name').value.trim();
+  if(!name) return toast('사업자명을 입력하세요','err');
+  DB.businesses.push({id:'b'+Date.now(),name,platforms:[],couriers:[]});
+  save(); closeModal('m-add-biz'); renderWorkBizBar(); renderInvBizBar(); renderSettings(); toast(name+' 추가!','ok');
+  document.getElementById('new-biz-name').value='';
+}
+function delBiz(id) {
+  if(!confirm('사업자를 삭제하시겠습니까?')) return;
+  DB.businesses=DB.businesses.filter(b=>b.id!==id);
+  save(); renderSettings(); renderWorkBizBar(); renderInvBizBar();
+}
+
+// 링크 모달
+let linkCtx={};
+function openLinkModal(bizId, type) {
+  linkCtx={bizId,type};
+  const biz=DB.businesses.find(b=>b.id===bizId);
+  const isP=type==='platform';
+  document.getElementById('m-bs-title').textContent=`${biz.name} — ${isP?'플랫폼':'택배사'} 연결`;
+  const all=isP?DB.platforms:DB.couriers;
+  const linked=isP?biz.platforms:biz.couriers;
+  document.getElementById('m-bs-body').innerHTML=all.length
+    ?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${all.map(item=>`
+      <div class="courier-item ${linked.includes(item.id)?(isP?'on':'on'):''}\" onclick="toggleLink('${item.id}')">
+        ${item.name}
+        <svg class="courier-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>`).join('')}</div>`
+    :`<div class="empty-state"><p>${isP?'플랫폼':'택배사'}을 먼저 등록하세요</p></div>`;
+  openModal('m-biz-settings');
+}
+function toggleLink(itemId) {
+  const biz=DB.businesses.find(b=>b.id===linkCtx.bizId);
+  const arr=linkCtx.type==='platform'?biz.platforms:biz.couriers;
+  const idx=arr.indexOf(itemId);
+  if(idx>-1) arr.splice(idx,1); else arr.push(itemId);
+  save(); openLinkModal(linkCtx.bizId,linkCtx.type); renderSettings();
+}
+function unlinkItem(bizId,type,itemId) {
+  const biz=DB.businesses.find(b=>b.id===bizId);
+  if(type==='platform') biz.platforms=biz.platforms.filter(id=>id!==itemId);
+  else biz.couriers=biz.couriers.filter(id=>id!==itemId);
+  save(); renderSettings();
+}
+
+// 플랫폼
+let pfCtx={id:null,cols:[]};
+function openAddPlatform() {
+  pfCtx={id:null,cols:[]};
+  document.getElementById('m-pf-title').textContent='플랫폼 추가';
+  document.getElementById('pf-name').value='';
+  document.getElementById('pf-sample-res').innerHTML='';
+  document.getElementById('pf-map-sec').style.display='none';
+  document.getElementById('pf-sample').value='';
+  openModal('m-platform');
+}
+function openAddPlatformAndLink(bizId) {
+  pfCtx={id:null,cols:[],linkToBiz:bizId};
+  document.getElementById('m-pf-title').textContent='플랫폼 추가';
+  document.getElementById('pf-name').value='';
+  document.getElementById('pf-sample-res').innerHTML='';
+  document.getElementById('pf-map-sec').style.display='none';
+  openModal('m-platform');
+}
+function openEditPlatform(id) {
+  const p=DB.platforms.find(x=>x.id===id);
+  pfCtx={id,cols:p.columns||[]};
+  document.getElementById('m-pf-title').textContent='플랫폼 수정';
+  document.getElementById('pf-name').value=p.name;
+  document.getElementById('pf-sample-res').innerHTML='';
+  if(pfCtx.cols.length) renderPfMapTable(p.mapping||{},p.channelCol||'');
+  openModal('m-platform');
+}
+function loadPfSample(input) {
+  if(!input.files[0]) return;
+  readXlsx(input.files[0], (headers) => {
+    pfCtx.cols=headers.filter(h=>h!==undefined&&h!=='');
+    document.getElementById('pf-sample-res').innerHTML=
+      `<div class="file-done-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>${pfCtx.cols.length}개 컬럼 감지됨</div>`;
+    renderPfMapTable({},'');
+  });
+}
+function renderPfMapTable(existing={}, existingCh='') {
+  document.getElementById('pf-map-sec').style.display='block';
+  const opts=['(매핑 안함)',...pfCtx.cols].map(c=>`<option value="${c}">${c}</option>`).join('');
+  document.getElementById('pf-map-table').innerHTML=
+    `<tr><th>표준 필드</th><th>플랫폼 컬럼</th></tr>`+
+    STD.map(f=>{
+      const sel=existing[f.k]||'';
+      return `<tr><td>${f.l}</td><td><select id="pfm-${f.k}">${opts.replace(`value="${sel}"`,`value="${sel}" selected`)}</select></td></tr>`;
+    }).join('');
+  const chOpts=['(없음)',...pfCtx.cols].map(c=>`<option value="${c}" ${c===existingCh?'selected':''}>${c}</option>`).join('');
+  document.getElementById('pf-channel-col').innerHTML=chOpts;
+}
+function savePlatform() {
+  const name=document.getElementById('pf-name').value.trim();
+  if(!name) return toast('플랫폼명을 입력하세요','err');
+  const mapping={};
+  STD.forEach(f=>{const v=document.getElementById('pfm-'+f.k)?.value; if(v&&v!=='(매핑 안함)') mapping[f.k]=v;});
+  const channelCol=document.getElementById('pf-channel-col')?.value;
+  if(pfCtx.id) {
+    Object.assign(DB.platforms.find(x=>x.id===pfCtx.id),{name,columns:pfCtx.cols,mapping,channelCol});
+  } else {
+    const newPf={id:'p'+Date.now(),name,columns:pfCtx.cols,mapping,channelCol};
+    DB.platforms.push(newPf);
+    if(pfCtx.linkToBiz) {
+      const biz=DB.businesses.find(b=>b.id===pfCtx.linkToBiz);
+      if(biz&&!biz.platforms.includes(newPf.id)) biz.platforms.push(newPf.id);
+    }
+  }
+  save(); closeModal('m-platform'); renderSettings(); renderWorkPfArea(); toast(name+' 저장!','ok');
+}
+function delPlatform(id) {
+  if(!confirm('삭제하시겠습니까?')) return;
+  DB.platforms=DB.platforms.filter(p=>p.id!==id);
+  DB.businesses.forEach(b=>b.platforms=b.platforms.filter(pid=>pid!==id));
+  save(); renderSettings();
+}
+
+// 택배사
+let crCtx={id:null,cols:[]};
+function openAddCourier() {
+  crCtx={id:null,cols:[]};
+  document.getElementById('m-cr-title').textContent='택배사 추가';
+  document.getElementById('cr-name').value='';
+  document.getElementById('cr-sample-res').innerHTML='';
+  document.getElementById('cr-map-sec').style.display='none';
+  document.getElementById('cr-sample').value='';
+  openModal('m-courier');
+}
+function openEditCourier(id) {
+  const c=DB.couriers.find(x=>x.id===id);
+  crCtx={id,cols:c.columns||[]};
+  document.getElementById('m-cr-title').textContent='택배사 수정';
+  document.getElementById('cr-name').value=c.name;
+  document.getElementById('cr-sample-res').innerHTML='';
+  if(crCtx.cols.length) renderCrMapTable(c.mapping||{});
+  openModal('m-courier');
+}
+function loadCrSample(input) {
+  if(!input.files[0]) return;
+  readXlsx(input.files[0], (headers) => {
+    crCtx.cols=headers.filter(h=>h!==undefined&&h!=='');
+    document.getElementById('cr-sample-res').innerHTML=
+      `<div class="file-done-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>${crCtx.cols.length}개 컬럼 감지됨</div>`;
+    renderCrMapTable({});
+  });
+}
+function renderCrMapTable(existing={}) {
+  document.getElementById('cr-map-sec').style.display='block';
+  const opts=['(매핑 안함)',...crCtx.cols].map(c=>`<option value="${c}">${c}</option>`).join('');
+  document.getElementById('cr-map-table').innerHTML=
+    `<tr><th>표준 필드</th><th>택배사 컬럼</th></tr>`+
+    STD.map(f=>{
+      const sel=existing[f.k]||'';
+      return `<tr><td>${f.l}</td><td><select id="crm-${f.k}">${opts.replace(`value="${sel}"`,`value="${sel}" selected`)}</select></td></tr>`;
+    }).join('');
+}
+function saveCourier() {
+  const name=document.getElementById('cr-name').value.trim();
+  if(!name) return toast('택배사명을 입력하세요','err');
+  const mapping={};
+  STD.forEach(f=>{const v=document.getElementById('crm-'+f.k)?.value; if(v&&v!=='(매핑 안함)') mapping[f.k]=v;});
+  if(crCtx.id) {
+    Object.assign(DB.couriers.find(x=>x.id===crCtx.id),{name,columns:crCtx.cols,mapping});
+  } else {
+    DB.couriers.push({id:'c'+Date.now(),name,columns:crCtx.cols,mapping});
+  }
+  save(); closeModal('m-courier'); renderSettings(); toast(name+' 저장!','ok');
+}
+function delCourier(id) {
+  if(!confirm('삭제하시겠습니까?')) return;
+  DB.couriers=DB.couriers.filter(c=>c.id!==id);
+  DB.businesses.forEach(b=>b.couriers=b.couriers.filter(cid=>cid!==id));
+  save(); renderSettings();
+}
+
+// 유틸
+function extractStd(row, ci, mapping) {
+  const std={};
+  STD.forEach(f=>{const col=mapping[f.k]; if(col&&ci[col]!==undefined) std[f.k]=row[ci[col]];});
+  return std;
+}
+function readXlsx(file, cb) {
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const wb=XLSX.read(e.target.result,{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const json=XLSX.utils.sheet_to_json(ws,{header:1});
+    cb(json[0]||[], json.slice(1).filter(r=>r.some(c=>c!==undefined&&c!=='')));
+  };
+  reader.readAsArrayBuffer(file);
+}
+function dlXlsx(data, filename) {
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), 'Sheet1');
+  XLSX.writeFile(wb, filename);
+}
+function today(){ return new Date().toISOString().slice(0,10).replace(/-/g,''); }
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+function toast(msg,type=''){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='toast show'+(type?' '+type:'');
+  setTimeout(()=>t.className='toast',2500);
+}
+
+// 초기화
+renderWorkBizBar();
+renderInvBizBar();
+</script>
+</body>
+</html>
