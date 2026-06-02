@@ -210,9 +210,10 @@ select.modal-sel option{background:var(--sur2);}
   <div class="right-panel">
     <div class="rp-section">
       <div class="rp-title">택배사 선택</div>
-      <div class="courier-list" id="w-courier-list">
-        <div style="font-size:12px;color:var(--tx3)">사업자를 먼저 선택하세요</div>
-      </div>
+      <select class="biz-select" id="w-courier-sel" onchange="onCourierChange('w')" style="margin-bottom:6px">
+        <option value="">택배사 선택...</option>
+      </select>
+      <div id="w-courier-status"></div>
     </div>
 
     <div class="divider"></div>
@@ -242,10 +243,11 @@ select.modal-sel option{background:var(--sur2);}
     </div>
 
     <div class="rp-section" style="margin-bottom:16px">
-      <div class="section-title">택배사 선택</div>
-      <div class="courier-list" id="i-courier-list" style="flex-direction:row;flex-wrap:wrap;gap:6px;display:flex">
-        <div style="font-size:12px;color:var(--tx3)">사업자를 먼저 선택하세요</div>
-      </div>
+      <div class="section-title" style="margin-bottom:8px">택배사 선택</div>
+      <select class="biz-select" id="i-courier-sel" onchange="onCourierChange('i')" style="margin-bottom:6px">
+        <option value="">택배사 선택...</option>
+      </select>
+      <div id="i-courier-status"></div>
     </div>
 
     <div class="section-title" style="margin-bottom:10px">송장 엑셀 업로드</div>
@@ -423,39 +425,70 @@ function switchTab(name, el) {
 let W = { bizId:null, courierId:null, pfFiles:{}, unifiedData:null, unifiedHeaders:null };
 
 function renderWorkBizBar() {
-  const sel = document.getElementById('w-biz-sel');
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">사업자 선택...</option>' +
+  document.getElementById('w-biz-sel').innerHTML = '<option value="">사업자 선택...</option>' +
     DB.businesses.map(b=>`<option value="${b.id}" ${b.id===W.bizId?'selected':''}>${b.name}</option>`).join('');
   renderWorkPfArea();
-  renderWorkCouriers();
+  renderWorkCourierDrop();
+}
+
+function renderWorkCourierDrop() {
+  const sel = document.getElementById('w-courier-sel');
+  const status = document.getElementById('w-courier-status');
+  if(!DB.couriers.length) {
+    sel.innerHTML='<option value="">등록된 택배사 없음</option>';
+    sel.disabled=true; status.innerHTML='<div style="font-size:11px;color:var(--tx3);margin-top:4px">설정에서 택배사를 먼저 등록하세요</div>'; return;
+  }
+  sel.disabled=false;
+  sel.innerHTML='<option value="">택배사 선택...</option>'+DB.couriers.map(c=>`<option value="${c.id}" ${c.id===W.courierId?'selected':''}>${c.name}</option>`).join('');
+  renderCourierStatus('w');
+}
+
+function renderCourierStatus(prefix) {
+  const id = prefix==='w' ? W.courierId : I.courierId;
+  const statusEl = document.getElementById(prefix+'-courier-status');
+  if(!id) { statusEl.innerHTML=''; return; }
+  const courier = DB.couriers.find(c=>c.id===id);
+  if(!courier) { statusEl.innerHTML=''; return; }
+  statusEl.innerHTML = courier.mapping
+    ? `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--green);margin-top:4px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg>${courier.columns?.length||0}개 컬럼 양식 적용됨</div>`
+    : `<div style="font-size:11px;color:var(--red);margin-top:4px">⚠ 설정에서 양식을 먼저 등록하세요</div>`;
 }
 
 function onBizChange(prefix) {
   const id = document.getElementById(prefix+'-biz-sel').value;
-  if(prefix==='w') { W.bizId=id; W.courierId=null; W.pfFiles={}; W.unifiedData=null; W.unifiedHeaders=null; renderWorkPfArea(); renderWorkCouriers(); renderWSummary(); }
-  if(prefix==='i') { I.bizId=id; I.courierId=null; I.data=null; I.headers=null; renderInvCouriers(); document.getElementById('i-file-result').innerHTML=''; document.getElementById('i-results').innerHTML='<div class="sum-empty">변환 후 표시됩니다</div>'; }
+  if(prefix==='w') {
+    W.bizId=id; W.pfFiles={}; W.unifiedData=null; W.unifiedHeaders=null;
+    renderWorkPfArea(); renderWSummary();
+  }
+  if(prefix==='i') {
+    I.bizId=id; I.data=null; I.headers=null;
+    document.getElementById('i-file-result').innerHTML='';
+    document.getElementById('i-results').innerHTML='<div class="sum-empty">변환 후 표시됩니다</div>';
+  }
 }
 
-function renderWorkCouriers() {
-  const biz = DB.businesses.find(b=>b.id===W.bizId);
-  const el = document.getElementById('w-courier-list');
-  if(!biz) { el.innerHTML='<div style="font-size:12px;color:var(--tx3)">사업자를 먼저 선택하세요</div>'; return; }
-  const couriers = DB.couriers.filter(c=>biz.couriers.includes(c.id));
-  el.innerHTML = couriers.length
-    ? couriers.map(c=>`
-      <div class="courier-item ${W.courierId===c.id?'on':''}" onclick="selCourier('w','${c.id}')">
-        ${c.name}
-        <svg class="courier-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-      </div>`).join('')
-    : '<div style="font-size:12px;color:var(--tx3)">연결된 택배사 없음<br><span style="font-size:11px">설정에서 연결하세요</span></div>';
+function onCourierChange(prefix) {
+  const id = document.getElementById(prefix+'-courier-sel').value;
+  if(prefix==='w') { W.courierId=id; renderCourierStatus('w'); }
+  if(prefix==='i') { I.courierId=id; renderCourierStatus('i'); }
 }
 
-function selCourier(prefix, id) {
-  if(prefix==='w') W.courierId = W.courierId===id ? null : id;
-  if(prefix==='i') I.courierId = I.courierId===id ? null : id;
-  if(prefix==='w') renderWorkCouriers();
-  if(prefix==='i') renderInvCouriers();
+function renderInvBizBar() {
+  document.getElementById('i-biz-sel').innerHTML = '<option value="">사업자 선택...</option>' +
+    DB.businesses.map(b=>`<option value="${b.id}" ${b.id===I.bizId?'selected':''}>${b.name}</option>`).join('');
+  renderInvCourierDrop();
+}
+
+function renderInvCourierDrop() {
+  const sel = document.getElementById('i-courier-sel');
+  const status = document.getElementById('i-courier-status');
+  if(!DB.couriers.length) {
+    sel.innerHTML='<option value="">등록된 택배사 없음</option>';
+    sel.disabled=true; status.innerHTML='<div style="font-size:11px;color:var(--tx3);margin-top:4px">설정에서 택배사를 먼저 등록하세요</div>'; return;
+  }
+  sel.disabled=false;
+  sel.innerHTML='<option value="">택배사 선택...</option>'+DB.couriers.map(c=>`<option value="${c.id}" ${c.id===I.courierId?'selected':''}>${c.name}</option>`).join('');
+  renderCourierStatus('i');
 }
 
 function renderWorkPfArea() {
@@ -631,17 +664,7 @@ function renderInvBizBar() {
   const sel = document.getElementById('i-biz-sel');
   sel.innerHTML = '<option value="">사업자 선택...</option>' +
     DB.businesses.map(b=>`<option value="${b.id}" ${b.id===I.bizId?'selected':''}>${b.name}</option>`).join('');
-  renderInvCouriers();
-}
-
-function renderInvCouriers() {
-  const biz = DB.businesses.find(b=>b.id===I.bizId);
-  const el = document.getElementById('i-courier-list');
-  if(!biz) { el.innerHTML='<div style="font-size:12px;color:var(--tx3)">사업자를 먼저 선택하세요</div>'; return; }
-  const couriers = DB.couriers.filter(c=>biz.couriers.includes(c.id));
-  el.innerHTML = couriers.length
-    ? couriers.map(c=>`<div class="courier-item ${I.courierId===c.id?'on':''}" onclick="selCourier('i','${c.id}')" style="flex:none">${c.name}<svg class="courier-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>`).join('')
-    : '<div style="font-size:12px;color:var(--tx3)">연결된 택배사 없음</div>';
+  renderInvCourierDrop();
 }
 
 function handleInvFile(input) { if(input.files[0]) processInvFile(input.files[0]); }
@@ -750,17 +773,12 @@ function renderSettings() {
   const bl = document.getElementById('biz-settings-list');
   bl.innerHTML = DB.businesses.map(b => {
     const pfs = DB.platforms.filter(p=>b.platforms.includes(p.id));
-    const crs = DB.couriers.filter(c=>b.couriers.includes(c.id));
     return `<div class="item-row" style="align-items:flex-start;padding:12px 0">
       <div style="flex:1">
         <div style="font-size:13px;font-weight:500;margin-bottom:6px">${b.name}</div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px">
-          ${pfs.map(p=>`<span class="badge badge-blue">${p.name}<span style="cursor:pointer;margin-left:3px;opacity:.6" onclick="unlinkItem('${b.id}','platform','${p.id}')">×</span></span>`).join('')}
-          <button class="btn btn-sm" onclick="openLinkModal('${b.id}','platform')" style="font-size:10px;padding:2px 7px">+ 플랫폼</button>
-        </div>
         <div style="display:flex;flex-wrap:wrap;gap:4px">
-          ${crs.map(c=>`<span class="badge badge-green">${c.name}<span style="cursor:pointer;margin-left:3px;opacity:.6" onclick="unlinkItem('${b.id}','courier','${c.id}')">×</span></span>`).join('')}
-          <button class="btn btn-sm" onclick="openLinkModal('${b.id}','courier')" style="font-size:10px;padding:2px 7px">+ 택배사</button>
+          ${pfs.map(p=>`<span class="badge badge-blue">${p.name}<span style="cursor:pointer;margin-left:3px;opacity:.6" onclick="unlinkItem('${b.id}','platform','${p.id}')">×</span></span>`).join('')}
+          <button class="btn btn-sm" onclick="openLinkModal('${b.id}')" style="font-size:10px;padding:2px 7px">+ 플랫폼 연결</button>
         </div>
       </div>
       <button class="btn btn-sm btn-danger" onclick="delBiz('${b.id}')">삭제</button>
@@ -782,35 +800,30 @@ function delBiz(id) {
   save(); renderSettings(); renderWorkBizBar(); renderInvBizBar();
 }
 
-// 링크 모달
-let linkCtx={};
-function openLinkModal(bizId, type) {
-  linkCtx={bizId,type};
+function openLinkModal(bizId) {
+  linkCtx={bizId, type:'platform'};
   const biz=DB.businesses.find(b=>b.id===bizId);
-  const isP=type==='platform';
-  document.getElementById('m-bs-title').textContent=`${biz.name} — ${isP?'플랫폼':'택배사'} 연결`;
-  const all=isP?DB.platforms:DB.couriers;
-  const linked=isP?biz.platforms:biz.couriers;
-  document.getElementById('m-bs-body').innerHTML=all.length
-    ?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${all.map(item=>`
-      <div class="courier-item ${linked.includes(item.id)?(isP?'on':'on'):''}\" onclick="toggleLink('${item.id}')">
+  document.getElementById('m-bs-title').textContent=`${biz.name} — 플랫폼 연결`;
+  const linked=biz.platforms;
+  document.getElementById('m-bs-body').innerHTML=DB.platforms.length
+    ?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${DB.platforms.map(item=>`
+      <div class="courier-item ${linked.includes(item.id)?'on':''}" onclick="toggleLink('${item.id}')">
         ${item.name}
         <svg class="courier-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
       </div>`).join('')}</div>`
-    :`<div class="empty-state"><p>${isP?'플랫폼':'택배사'}을 먼저 등록하세요</p></div>`;
+    :`<div class="empty-state"><p>플랫폼을 먼저 등록하세요</p></div>`;
   openModal('m-biz-settings');
 }
 function toggleLink(itemId) {
   const biz=DB.businesses.find(b=>b.id===linkCtx.bizId);
-  const arr=linkCtx.type==='platform'?biz.platforms:biz.couriers;
+  const arr=biz.platforms;
   const idx=arr.indexOf(itemId);
   if(idx>-1) arr.splice(idx,1); else arr.push(itemId);
-  save(); openLinkModal(linkCtx.bizId,linkCtx.type); renderSettings();
+  save(); openLinkModal(linkCtx.bizId); renderSettings();
 }
-function unlinkItem(bizId,type,itemId) {
+function unlinkItem(bizId, type, itemId) {
   const biz=DB.businesses.find(b=>b.id===bizId);
   if(type==='platform') biz.platforms=biz.platforms.filter(id=>id!==itemId);
-  else biz.couriers=biz.couriers.filter(id=>id!==itemId);
   save(); renderSettings();
 }
 
@@ -978,7 +991,9 @@ function toast(msg,type=''){
 
 // 초기화
 renderWorkBizBar();
+renderWorkCourierDrop();
 renderInvBizBar();
+renderInvCourierDrop();
 </script>
 </body>
 </html>
