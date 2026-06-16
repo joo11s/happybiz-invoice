@@ -393,134 +393,89 @@ const STD = [
   {k:'platform',l:'플랫폼구분'},
 ];
 
-let DB = (() => {
-  try {
-    const saved = JSON.parse(localStorage.getItem("icdb2")||"null");
-    if(!saved) return dfDB();
-    if(!saved.couriers || !saved.couriers.length) saved.couriers = dfDB().couriers;
-    saved.businesses.forEach(b => { delete b.couriers; });
-    // 플랫폼 프리셋: 카페24
-    if(!saved.platforms) saved.platforms = [];
-    if(!saved.platforms.find(p=>p.id==='platform-cafe24')) {
-      saved.platforms.push({
-        id:'platform-cafe24',
-        name:'카페24',
-        columns:['쇼핑몰','주문번호','배송메시지','주문상품명','주문상품명(옵션포함)','수량','수령인','수령인 휴대전화','수령인 우편번호','수령인 주소','수령인 상세 주소','수령인 주소(전체)'],
-        mapping:{
-          receiver:'수령인',
-          phone:'수령인 휴대전화',
-          zipcode:'수령인 우편번호',
-          address:'수령인 주소(전체)',
-          product:'주문상품명',
-          qty:'수량',
-          memo:'배송메시지',
-          orderId:'주문번호'
-        },
-        platformCol:null
-      });
-    }
-    // 택배사 프리셋: CJ대한통운
-    if(!saved.couriers.find(c=>c.id==='courier-cj')) {
-      saved.couriers.push({
-        id:'courier-cj',
-        name:'CJ대한통운',
-        columns:['보내는분성명','보내는분전화번호','보내는분주소(전체, 분할)','받는분성명','받는분전화번호','받는분우편번호','받는분주소(전체, 분할)','배송메세지1','품목명','내품명','박스타입','내품수량','박스수량','운송장 번호'],
-        mapping:{
-          receiver:'받는분성명',
-          phone:'받는분전화번호',
-          zipcode:'받는분우편번호',
-          address:'받는분주소(전체, 분할)',
-          product:'품목명',
-          qty:'내품수량',
-          memo:'배송메세지1',
-          trackingNo:'운송장 번호'
-        }
-      });
-    }
-    // 택배사 프리셋: 롯데택배 B타입
-    if(!saved.couriers.find(c=>c.id==='courier-lotte')) {
-      saved.couriers.push({
-        id:'courier-lotte',
-        name:'롯데택배 B타입',
-        columns:['주문번호','보내는사람(지정)','전화번호1(지정)','전화번호2(지정)','우편번호(지정)','주소(지정)','받는사람','전화번호1','전화번호2','우편번호','주소','상품명1','상품상세1','수량(A타입)','배송메시지','운임구분','운임','운송장번호'],
-        mapping:{
-          orderId:'주문번호',
-          receiver:'받는사람',
-          phone:'전화번호1',
-          zipcode:'우편번호',
-          address:'주소',
-          product:'상품명1',
-          qty:'수량(A타입)',
-          memo:'배송메시지',
-          trackingNo:'운송장번호'
-        }
-      });
-    }
-    return saved;
-  } catch(e) { return dfDB(); }
-})();
+function initDB() {
+  let db = JSON.parse(localStorage.getItem('icdb2') || 'null');
 
-function dfDB() {
-  return {
-    businesses:[
-      {id:"b1",name:"소울스토어",platforms:[]},
-      {id:"b2",name:"제이원투몰",platforms:[]},
-      {id:"b3",name:"행복산업",platforms:[]},
-      {id:"b4",name:"태실장픽앤샵",platforms:[]},
-    ],
-    platforms:[
-      {
-        id:'platform-cafe24',
-        name:'카페24',
-        columns:['쇼핑몰','주문번호','배송메시지','주문상품명','주문상품명(옵션포함)','수량','수령인','수령인 휴대전화','수령인 우편번호','수령인 주소','수령인 상세 주소','수령인 주소(전체)'],
-        mapping:{
-          receiver:'수령인',
-          phone:'수령인 휴대전화',
-          zipcode:'수령인 우편번호',
-          address:'수령인 주소(전체)',
-          product:'주문상품명',
-          qty:'수량',
-          memo:'배송메시지',
-          orderId:'주문번호'
-        },
-        platformCol:null
-      }
-    ],
-    couriers:[
-      {
-        id:"courier-cj",
-        name:"CJ대한통운",
-        columns:["보내는분성명","보내는분전화번호","보내는분주소(전체, 분할)","받는분성명","받는분전화번호","받는분우편번호","받는분주소(전체, 분할)","배송메세지1","품목명","내품명","박스타입","내품수량","박스수량","운송장 번호"],
-        mapping:{
-          receiver:"받는분성명",
-          phone:"받는분전화번호",
-          zipcode:"받는분우편번호",
-          address:"받는분주소(전체, 분할)",
-          product:"품목명",
-          qty:"내품수량",
-          memo:"배송메세지1",
-          trackingNo:"운송장 번호"
-        }
+  if (!db) {
+    // 완전 신규: 기본 구조 생성
+    db = {
+      businesses: [
+        {id:'b1', name:'소울스토어', platforms:[]},
+        {id:'b2', name:'제이원투몰', platforms:[]},
+        {id:'b3', name:'행복산업', platforms:[]},
+        {id:'b4', name:'태실장픽앤샵', platforms:[]}
+      ],
+      platforms: [],
+      couriers: []
+    };
+  }
+
+  // 카페24 플랫폼 프리셋 (없으면 추가)
+  if (!db.platforms) db.platforms = [];
+  if (!db.platforms.find(p => p.id === 'platform-cafe24')) {
+    db.platforms.push({
+      id: 'platform-cafe24',
+      name: '카페24',
+      columns: ['쇼핑몰','주문번호','배송메시지','주문상품명','주문상품명(옵션포함)','수량','수령인','수령인 휴대전화','수령인 우편번호','수령인 주소','수령인 상세 주소','수령인 주소(전체)'],
+      mapping: {
+        orderId: '주문번호',
+        receiver: '수령인',
+        phone: '수령인 휴대전화',
+        zipcode: '수령인 우편번호',
+        address: '수령인 주소(전체)',
+        product: '주문상품명',
+        qty: '수량',
+        memo: '배송메시지'
       },
-      {
-        id:"courier-lotte",
-        name:"롯데택배 B타입",
-        columns:["주문번호","보내는사람(지정)","전화번호1(지정)","전화번호2(지정)","우편번호(지정)","주소(지정)","받는사람","전화번호1","전화번호2","우편번호","주소","상품명1","상품상세1","수량(A타입)","배송메시지","운임구분","운임","운송장번호"],
-        mapping:{
-          orderId:"주문번호",
-          receiver:"받는사람",
-          phone:"전화번호1",
-          zipcode:"우편번호",
-          address:"주소",
-          product:"상품명1",
-          qty:"수량(A타입)",
-          memo:"배송메시지",
-          trackingNo:"운송장번호"
-        }
+      platformCol: null
+    });
+  }
+
+  // CJ대한통운 프리셋 (없으면 추가)
+  if (!db.couriers) db.couriers = [];
+  if (!db.couriers.find(c => c.id === 'courier-cj')) {
+    db.couriers.push({
+      id: 'courier-cj',
+      name: 'CJ대한통운',
+      columns: ['보내는분성명','보내는분전화번호','보내는분주소(전체, 분할)','받는분성명','받는분전화번호','받는분우편번호','받는분주소(전체, 분할)','배송메세지1','품목명','내품명','박스타입','내품수량','박스수량','운송장 번호'],
+      mapping: {
+        receiver: '받는분성명',
+        phone: '받는분전화번호',
+        zipcode: '받는분우편번호',
+        address: '받는분주소(전체, 분할)',
+        product: '품목명',
+        qty: '내품수량',
+        memo: '배송메세지1',
+        trackingNo: '운송장 번호'
       }
-    ]
-  };
+    });
+  }
+
+  // 롯데택배 B타입 프리셋 (없으면 추가)
+  if (!db.couriers.find(c => c.id === 'courier-lotte')) {
+    db.couriers.push({
+      id: 'courier-lotte',
+      name: '롯데택배 B타입',
+      columns: ['주문번호','보내는사람(지정)','전화번호1(지정)','전화번호2(지정)','우편번호(지정)','주소(지정)','받는사람','전화번호1','전화번호2','우편번호','주소','상품명1','상품상세1','수량(A타입)','배송메시지','운임구분','운임','운송장번호'],
+      mapping: {
+        orderId: '주문번호',
+        receiver: '받는사람',
+        phone: '전화번호1',
+        zipcode: '우편번호',
+        address: '주소',
+        product: '상품명1',
+        qty: '수량(A타입)',
+        memo: '배송메시지',
+        trackingNo: '운송장번호'
+      }
+    });
+  }
+
+  // 반드시 저장
+  localStorage.setItem('icdb2', JSON.stringify(db));
+  return db;
 }
+let DB = initDB();
 function save() { localStorage.setItem('icdb2', JSON.stringify(DB)); }
 
 // 탭
