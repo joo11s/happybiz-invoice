@@ -259,7 +259,7 @@ select.modal-sel option{background:var(--sur2);}
       <p>송장번호 입력된 택배사 엑셀</p>
       <small>드래그하거나 클릭해서 선택</small>
     </div>
-    <input type="file" id="i-file" accept=".xlsx,.xls" style="display:none" onchange="handleInvFile(this)">
+    <input type="file" id="i-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleInvFile(this)">
     <div id="i-file-result"></div>
   </div>
 
@@ -398,6 +398,19 @@ let DB = (() => {
     if(!saved) return dfDB();
     if(!saved.couriers || !saved.couriers.length) saved.couriers = dfDB().couriers;
     saved.businesses.forEach(b => { delete b.couriers; });
+    // 카페24 기본 프리셋 추가
+    if(!saved.platforms) saved.platforms = [];
+    if(!saved.platforms.find(p=>p.name==='카페24')) {
+      saved.platforms.push({
+        id:'p_cafe24',name:'카페24',platformCol:null,
+        columns:[],
+        mapping:{
+          order_no:'주문번호',receiver:'수령인',phone:'수령인 휴대전화',
+          address:'수령인 주소(전체)',product_name:'주문상품명',
+          quantity:'수량',memo:'배송메시지'
+        }
+      });
+    }
     return saved;
   } catch(e) { return dfDB(); }
 })();
@@ -410,7 +423,17 @@ function dfDB() {
       {id:"b3",name:"행복산업",platforms:[]},
       {id:"b4",name:"태실장픽앤샵",platforms:[]},
     ],
-    platforms:[],
+    platforms:[
+      {
+        id:'p_cafe24',name:'카페24',platformCol:null,
+        columns:[],
+        mapping:{
+          order_no:'주문번호',receiver:'수령인',phone:'수령인 휴대전화',
+          address:'수령인 주소(전체)',product_name:'주문상품명',
+          quantity:'수량',memo:'배송메시지'
+        }
+      }
+    ],
     couriers:[
       {
         id:"cr_cj", name:"CJ대한통운",
@@ -547,10 +570,10 @@ function renderWorkPfArea() {
             <div class="pf-drop-inner">
               <img class="pf-drop-icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c9a84c' stroke-width='1.5'%3E%3Cpath d='M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z'/%3E%3C/svg%3E">
               <p>이 파일을 <strong>드래그</strong>하거나 클릭해서 선택</p>
-              <small>.xlsx / .xls</small>
+              <small>.xlsx / .xls / .csv</small>
             </div>
           </div>
-          <input type="file" id="pf-file-${p.id}" accept=".xlsx,.xls" style="display:none" onchange="handlePfFile(this,'${p.id}')">`
+          <input type="file" id="pf-file-${p.id}" accept=".xlsx,.xls,.csv" style="display:none" onchange="handlePfFile(this,'${p.id}')">`
       }
     </div>`;
   }).join('');
@@ -576,10 +599,10 @@ function renderWorkPfArea() {
           <div class="pf-drop-inner">
             <img class="pf-drop-icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c9a84c' stroke-width='1.5'%3E%3Cpath d='M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z'/%3E%3C/svg%3E">
             <p>통합 주문 엑셀 드래그 or 클릭</p>
-            <small>선택사항 · .xlsx / .xls</small>
+            <small>선택사항 · .xlsx / .xls / .csv</small>
           </div>
         </div>
-        <input type="file" id="w-unified-input" accept=".xlsx,.xls" style="display:none" onchange="handleUnified(this)">`
+        <input type="file" id="w-unified-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleUnified(this)">`
     }
   </div>`;
 
@@ -983,15 +1006,64 @@ function extractStd(row, ci, mapping) {
   STD.forEach(f=>{const col=mapping[f.k]; if(col&&ci[col]!==undefined) std[f.k]=row[ci[col]];});
   return std;
 }
+function parseCSV(text) {
+  // Remove BOM if present
+  text = text.replace(/^\uFEFF/, '');
+  const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
+  if (lines.length === 0) return { headers: [], rows: [] };
+
+  function parseLine(line) {
+    const result = [];
+    let cur = '';
+    let inQuote = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuote && line[i+1] === '"') { cur += '"'; i++; }
+        else inQuote = !inQuote;
+      } else if (ch === ',' && !inQuote) {
+        result.push(cur); cur = '';
+      } else {
+        cur += ch;
+      }
+    }
+    result.push(cur);
+    return result;
+  }
+
+  const headers = parseLine(lines[0]);
+  const rows = lines.slice(1).map(l => {
+    const vals = parseLine(l);
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = vals[i] !== undefined ? vals[i] : ''; });
+    return obj;
+  });
+  return { headers, rows };
+}
+
 function readXlsx(file, cb) {
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const wb=XLSX.read(e.target.result,{type:'array'});
-    const ws=wb.Sheets[wb.SheetNames[0]];
-    const json=XLSX.utils.sheet_to_json(ws,{header:1});
-    cb(json[0]||[], json.slice(1).filter(r=>r.some(c=>c!==undefined&&c!=='')));
-  };
-  reader.readAsArrayBuffer(file);
+  const isCSV = file.name.toLowerCase().endsWith('.csv');
+  if (isCSV) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const { headers, rows } = parseCSV(e.target.result);
+      // Convert rows (array of objects) to array-of-arrays format compatible with existing code
+      const ci = {};
+      headers.forEach((h, i) => { ci[h] = i; });
+      const dataRows = rows.map(obj => headers.map(h => obj[h] !== undefined ? obj[h] : ''));
+      cb(headers, dataRows.filter(r => r.some(c => c !== undefined && c !== '')));
+    };
+    reader.readAsText(file, 'UTF-8');
+  } else {
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const json=XLSX.utils.sheet_to_json(ws,{header:1});
+      cb(json[0]||[], json.slice(1).filter(r=>r.some(c=>c!==undefined&&c!=='')));
+    };
+    reader.readAsArrayBuffer(file);
+  }
 }
 function dlXlsx(data, filename) {
   const wb=XLSX.utils.book_new();
