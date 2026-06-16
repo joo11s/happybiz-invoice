@@ -399,16 +399,17 @@ let DB = (() => {
     if(!saved) return dfDB();
     if(!saved.couriers || !saved.couriers.length) saved.couriers = dfDB().couriers;
     saved.businesses.forEach(b => { delete b.couriers; });
-    // 카페24 기본 프리셋 추가
+    // 플랫폼 프리셋: 카페24
     if(!saved.platforms) saved.platforms = [];
     if(!saved.platforms.find(p=>p.id==='platform-cafe24')) {
       saved.platforms.push({
         id:'platform-cafe24',
         name:'카페24',
-        columns:['쇼핑몰','주문번호','배송메시지','주문상품명','수량','수령인','수령인 휴대전화','수령인 우편번호','수령인 주소','수령인 상세 주소','수령인 주소(전체)'],
+        columns:['쇼핑몰','주문번호','배송메시지','주문상품명','주문상품명(옵션포함)','수량','수령인','수령인 휴대전화','수령인 우편번호','수령인 주소','수령인 상세 주소','수령인 주소(전체)'],
         mapping:{
           receiver:'수령인',
           phone:'수령인 휴대전화',
+          zipcode:'수령인 우편번호',
           address:'수령인 주소(전체)',
           product:'주문상품명',
           qty:'수량',
@@ -416,6 +417,43 @@ let DB = (() => {
           orderId:'주문번호'
         },
         platformCol:null
+      });
+    }
+    // 택배사 프리셋: CJ대한통운
+    if(!saved.couriers.find(c=>c.id==='courier-cj')) {
+      saved.couriers.push({
+        id:'courier-cj',
+        name:'CJ대한통운',
+        columns:['보내는분성명','보내는분전화번호','보내는분주소(전체, 분할)','받는분성명','받는분전화번호','받는분우편번호','받는분주소(전체, 분할)','배송메세지1','품목명','내품명','박스타입','내품수량','박스수량','운송장 번호'],
+        mapping:{
+          receiver:'받는분성명',
+          phone:'받는분전화번호',
+          zipcode:'받는분우편번호',
+          address:'받는분주소(전체, 분할)',
+          product:'품목명',
+          qty:'내품수량',
+          memo:'배송메세지1',
+          trackingNo:'운송장 번호'
+        }
+      });
+    }
+    // 택배사 프리셋: 롯데택배 B타입
+    if(!saved.couriers.find(c=>c.id==='courier-lotte')) {
+      saved.couriers.push({
+        id:'courier-lotte',
+        name:'롯데택배 B타입',
+        columns:['주문번호','보내는사람(지정)','전화번호1(지정)','전화번호2(지정)','우편번호(지정)','주소(지정)','받는사람','전화번호1','전화번호2','우편번호','주소','상품명1','상품상세1','수량(A타입)','배송메시지','운임구분','운임','운송장번호'],
+        mapping:{
+          orderId:'주문번호',
+          receiver:'받는사람',
+          phone:'전화번호1',
+          zipcode:'우편번호',
+          address:'주소',
+          product:'상품명1',
+          qty:'수량(A타입)',
+          memo:'배송메시지',
+          trackingNo:'운송장번호'
+        }
       });
     }
     return saved;
@@ -434,10 +472,11 @@ function dfDB() {
       {
         id:'platform-cafe24',
         name:'카페24',
-        columns:['쇼핑몰','주문번호','배송메시지','주문상품명','수량','수령인','수령인 휴대전화','수령인 우편번호','수령인 주소','수령인 상세 주소','수령인 주소(전체)'],
+        columns:['쇼핑몰','주문번호','배송메시지','주문상품명','주문상품명(옵션포함)','수량','수령인','수령인 휴대전화','수령인 우편번호','수령인 주소','수령인 상세 주소','수령인 주소(전체)'],
         mapping:{
           receiver:'수령인',
           phone:'수령인 휴대전화',
+          zipcode:'수령인 우편번호',
           address:'수령인 주소(전체)',
           product:'주문상품명',
           qty:'수량',
@@ -449,14 +488,35 @@ function dfDB() {
     ],
     couriers:[
       {
-        id:"cr_cj", name:"CJ대한통운",
+        id:"courier-cj",
+        name:"CJ대한통운",
         columns:["보내는분성명","보내는분전화번호","보내는분주소(전체, 분할)","받는분성명","받는분전화번호","받는분우편번호","받는분주소(전체, 분할)","배송메세지1","품목명","내품명","박스타입","내품수량","박스수량","운송장 번호"],
-        mapping:{receiver:"받는분성명",phone:"받는분전화번호",zipcode:"받는분우편번호",address:"받는분주소(전체, 분할)",product_name:"품목명",product_option:"내품명",quantity:"내품수량",memo:"배송메세지1",invoice_no:"운송장 번호"}
+        mapping:{
+          receiver:"받는분성명",
+          phone:"받는분전화번호",
+          zipcode:"받는분우편번호",
+          address:"받는분주소(전체, 분할)",
+          product:"품목명",
+          qty:"내품수량",
+          memo:"배송메세지1",
+          trackingNo:"운송장 번호"
+        }
       },
       {
-        id:"cr_lotte", name:"롯데택배(B타입)",
+        id:"courier-lotte",
+        name:"롯데택배 B타입",
         columns:["주문번호","보내는사람(지정)","전화번호1(지정)","전화번호2(지정)","우편번호(지정)","주소(지정)","받는사람","전화번호1","전화번호2","우편번호","주소","상품명1","상품상세1","수량(A타입)","배송메시지","운임구분","운임","운송장번호"],
-        mapping:{order_no:"주문번호",receiver:"받는사람",phone:"전화번호1",phone2:"전화번호2",zipcode:"우편번호",address:"주소",product_name:"상품명1",product_option:"상품상세1",quantity:"수량(A타입)",memo:"배송메시지",invoice_no:"운송장번호"}
+        mapping:{
+          orderId:"주문번호",
+          receiver:"받는사람",
+          phone:"전화번호1",
+          zipcode:"우편번호",
+          address:"주소",
+          product:"상품명1",
+          qty:"수량(A타입)",
+          memo:"배송메시지",
+          trackingNo:"운송장번호"
+        }
       }
     ]
   };
