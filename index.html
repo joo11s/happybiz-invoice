@@ -252,7 +252,7 @@ select.modal-sel option{background:var(--sur2);}
 
     <div class="section-title" style="margin-bottom:10px">송장 엑셀 업로드</div>
     <div class="upload-zone" id="i-drop-zone" onclick="document.getElementById('i-file').click()"
-      ondragover="ev.preventDefault();this.classList.add('drag')"
+      ondragover="event.preventDefault();this.classList.add('drag')"
       ondragleave="this.classList.remove('drag')"
       ondrop="handleDrop(event,'i-file-handler')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
