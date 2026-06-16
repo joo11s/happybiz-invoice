@@ -400,14 +400,31 @@ function initDB() {
     // 완전 신규: 기본 구조 생성
     db = {
       businesses: [
-        {id:'b1', name:'소울스토어', platforms:[]},
-        {id:'b2', name:'제이원투몰', platforms:[]},
-        {id:'b3', name:'행복산업', platforms:[]},
-        {id:'b4', name:'태실장픽앤샵', platforms:[]}
+        {id:'b1', name:'소울스토어', platforms:[], senderName:'소울스토어', senderPhone:'010-2385-9982', senderAddress:'전북특별자치도 전주시 완산구 흑석로 53, 102동 207호(서서학동, 푸른맨션)'},
+        {id:'b2', name:'제이원투몰', platforms:[], senderName:'제이원', senderPhone:'010-9862-7739', senderAddress:'전북특별자치도 전주시 덕진구 번영로 230-7, 1동(성덕동)'},
+        {id:'b3', name:'행복산업', platforms:[], senderName:'행복산업', senderPhone:'010-6492-7749', senderAddress:'전북특별자치도 전주시 덕진구 번영로 230-7, (성덕동)'},
+        {id:'b4', name:'태실장픽앤샵', platforms:[], senderName:'', senderPhone:'', senderAddress:''}
       ],
       platforms: [],
       couriers: []
     };
+  }
+
+  // 기존 사업자 마이그레이션: senderName/senderPhone/senderAddress 없으면 기본값 채우기
+  const bizDefaults = {
+    b1: {senderName:'소울스토어', senderPhone:'010-2385-9982', senderAddress:'전북특별자치도 전주시 완산구 흑석로 53, 102동 207호(서서학동, 푸른맨션)'},
+    b2: {senderName:'제이원', senderPhone:'010-9862-7739', senderAddress:'전북특별자치도 전주시 덕진구 번영로 230-7, 1동(성덕동)'},
+    b3: {senderName:'행복산업', senderPhone:'010-6492-7749', senderAddress:'전북특별자치도 전주시 덕진구 번영로 230-7, (성덕동)'},
+    b4: {senderName:'', senderPhone:'', senderAddress:''}
+  };
+  if (db.businesses) {
+    db.businesses.forEach(b => {
+      if (b.senderName === undefined || b.senderPhone === undefined || b.senderAddress === undefined) {
+        const def = bizDefaults[b.id];
+        if (def) { b.senderName = def.senderName; b.senderPhone = def.senderPhone; b.senderAddress = def.senderAddress; }
+        else { b.senderName = b.senderName||''; b.senderPhone = b.senderPhone||''; b.senderAddress = b.senderAddress||''; }
+      }
+    });
   }
 
   // 카페24 플랫폼 프리셋 (없으면 추가, 있으면 매핑 강제 갱신)
@@ -425,6 +442,7 @@ function initDB() {
       address_detail: '수령인 상세 주소',
       product_name: '주문상품명',
       product_option: '주문상품명(옵션포함)',
+      optionProduct: '주문상품명(옵션포함)',
       quantity: '수량',
       memo: '배송메시지'
     },
@@ -446,9 +464,18 @@ function initDB() {
       zipcode: '받는분우편번호',
       address: '받는분주소(전체, 분할)',
       product_name: '품목명',
+      product_option: '내품명',
       quantity: '내품수량',
       memo: '배송메세지1',
       invoice_no: '운송장 번호'
+    },
+    fixedValues: {
+      '보내는분성명': '__senderName__',
+      '보내는분전화번호': '__senderPhone__',
+      '보내는분주소(전체, 분할)': '__senderAddress__',
+      '박스수량': '1',
+      '박스타입': '',
+      '운송장 번호': ''
     }
   };
   const cjIdx = db.couriers.findIndex(c => c.id === 'courier-cj');
@@ -472,6 +499,12 @@ function initDB() {
       quantity: '수량(A타입)',
       memo: '배송메시지',
       invoice_no: '운송장번호'
+    },
+    fixedValues: {
+      '보내는사람(지정)': '__senderName__',
+      '전화번호1(지정)': '__senderPhone__',
+      '주소(지정)': '__senderAddress__',
+      '운송장번호': ''
     }
   };
   const lotteIdx = db.couriers.findIndex(c => c.id === 'courier-lotte');
@@ -726,7 +759,16 @@ function convertWork() {
   }
   if(!allRows.length) return toast('업로드된 파일이 없습니다','err');
   const crHeaders = courier.columns;
+  const fixedVals = courier.fixedValues || {};
   const outRows = allRows.map(std => crHeaders.map(ch => {
+    // fixedValues 우선 적용
+    if (ch in fixedVals) {
+      const fv = fixedVals[ch];
+      if (fv === '__senderName__') return biz.senderName || '';
+      if (fv === '__senderPhone__') return biz.senderPhone || '';
+      if (fv === '__senderAddress__') return biz.senderAddress || '';
+      return fv;
+    }
     const key = Object.entries(courier.mapping).find(([k,v])=>v===ch)?.[0];
     return key ? (std[key]??'') : '';
   }));
