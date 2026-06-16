@@ -253,6 +253,7 @@ select.modal-sel option{background:var(--sur2);}
     <div class="section-title" style="margin-bottom:10px">송장 엑셀 업로드</div>
     <div class="upload-zone" id="i-drop-zone" onclick="document.getElementById('i-file').click()"
       ondragover="event.preventDefault();this.classList.add('drag')"
+      ondragenter="event.preventDefault()"
       ondragleave="this.classList.remove('drag')"
       ondrop="handleDrop(event,'i-file-handler')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
@@ -400,15 +401,21 @@ let DB = (() => {
     saved.businesses.forEach(b => { delete b.couriers; });
     // 카페24 기본 프리셋 추가
     if(!saved.platforms) saved.platforms = [];
-    if(!saved.platforms.find(p=>p.name==='카페24')) {
+    if(!saved.platforms.find(p=>p.id==='platform-cafe24')) {
       saved.platforms.push({
-        id:'p_cafe24',name:'카페24',platformCol:null,
-        columns:[],
+        id:'platform-cafe24',
+        name:'카페24',
+        columns:['쇼핑몰','주문번호','배송메시지','주문상품명','수량','수령인','수령인 휴대전화','수령인 우편번호','수령인 주소','수령인 상세 주소','수령인 주소(전체)'],
         mapping:{
-          order_no:'주문번호',receiver:'수령인',phone:'수령인 휴대전화',
-          address:'수령인 주소(전체)',product_name:'주문상품명',
-          quantity:'수량',memo:'배송메시지'
-        }
+          receiver:'수령인',
+          phone:'수령인 휴대전화',
+          address:'수령인 주소(전체)',
+          product:'주문상품명',
+          qty:'수량',
+          memo:'배송메시지',
+          orderId:'주문번호'
+        },
+        platformCol:null
       });
     }
     return saved;
@@ -425,13 +432,19 @@ function dfDB() {
     ],
     platforms:[
       {
-        id:'p_cafe24',name:'카페24',platformCol:null,
-        columns:[],
+        id:'platform-cafe24',
+        name:'카페24',
+        columns:['쇼핑몰','주문번호','배송메시지','주문상품명','수량','수령인','수령인 휴대전화','수령인 우편번호','수령인 주소','수령인 상세 주소','수령인 주소(전체)'],
         mapping:{
-          order_no:'주문번호',receiver:'수령인',phone:'수령인 휴대전화',
-          address:'수령인 주소(전체)',product_name:'주문상품명',
-          quantity:'수량',memo:'배송메시지'
-        }
+          receiver:'수령인',
+          phone:'수령인 휴대전화',
+          address:'수령인 주소(전체)',
+          product:'주문상품명',
+          qty:'수량',
+          memo:'배송메시지',
+          orderId:'주문번호'
+        },
+        platformCol:null
       }
     ],
     couriers:[
@@ -539,9 +552,9 @@ function renderWorkPfArea() {
     el.innerHTML=`<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg><p>사업자를 선택하세요</p><small>플랫폼 업로드 목록이 표시됩니다</small></div>`;
     return;
   }
-  const platforms = DB.platforms.filter(p=>biz.platforms.includes(p.id));
+  const platforms = DB.platforms;
   if(!platforms.length) {
-    el.innerHTML=`<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg><p>연결된 플랫폼이 없습니다</p><small>설정 탭에서 플랫폼을 추가하고 사업자에 연결하세요</small></div>`;
+    el.innerHTML=`<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg><p>등록된 플랫폼이 없습니다</p><small>설정 탭에서 플랫폼을 추가하세요</small></div>`;
     return;
   }
   const pfHTML = platforms.map(p => {
@@ -565,6 +578,7 @@ function renderWorkPfArea() {
         : `<div class="pf-drop" id="drop-${p.id}"
             onclick="document.getElementById('pf-file-${p.id}').click()"
             ondragover="event.preventDefault();this.classList.add('drag')"
+            ondragenter="event.preventDefault()"
             ondragleave="this.classList.remove('drag')"
             ondrop="handlePfDrop(event,'${p.id}')">
             <div class="pf-drop-inner">
@@ -594,6 +608,7 @@ function renderWorkPfArea() {
       : `<div class="pf-drop"
           onclick="document.getElementById('w-unified-input').click()"
           ondragover="event.preventDefault();this.classList.add('drag')"
+          ondragenter="event.preventDefault()"
           ondragleave="this.classList.remove('drag')"
           ondrop="handleUnifiedDrop(event)">
           <div class="pf-drop-inner">
@@ -644,7 +659,7 @@ function processUnified(file) {
 
 function renderWSummary() {
   const biz = DB.businesses.find(b=>b.id===W.bizId);
-  const platforms = biz ? DB.platforms.filter(p=>biz.platforms.includes(p.id)) : [];
+  const platforms = biz ? DB.platforms : [];
   let rows='', total=0;
   platforms.forEach(p => {
     const fd = W.pfFiles[p.id];
@@ -662,7 +677,7 @@ function convertWork() {
   const biz = DB.businesses.find(b=>b.id===W.bizId);
   const courier = DB.couriers.find(c=>c.id===W.courierId);
   if(!courier?.mapping) return toast('택배사 컬럼 매핑을 설정하세요','err');
-  const platforms = DB.platforms.filter(p=>biz.platforms.includes(p.id));
+  const platforms = DB.platforms;
   const allRows = [];
 
   platforms.forEach(p => {
@@ -726,7 +741,7 @@ function convertInvoice() {
   if(!courier?.mapping) return toast('택배사 컬럼 매핑을 설정하세요','err');
   const ci = {}; I.headers.forEach((h,i)=>ci[h]=i);
   const stdRows = I.data.map(row => extractStd(row, ci, courier.mapping));
-  const platforms = DB.platforms.filter(p=>biz.platforms.includes(p.id));
+  const platforms = DB.platforms;
   const grouped = {};
   stdRows.forEach(std => {
     const pfName = std.platform||'기타';
