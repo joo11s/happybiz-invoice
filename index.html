@@ -229,6 +229,17 @@ select.modal-sel option{background:var(--sur2);}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
       변환 · 다운로드
     </button>
+
+    <div class="divider"></div>
+
+    <div class="rp-section">
+      <div class="rp-title">③ 운송장번호 → 카페24 업로드</div>
+      <input type="file" id="w-tracking-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleTrackingFile(this)">
+      <button class="btn btn-full" onclick="document.getElementById('w-tracking-input').click()" style="margin-bottom:6px">
+        택배사 결과파일 업로드 (운송장번호 채워진 것)
+      </button>
+      <small style="color:#888;font-size:12px">① 변환 기록을 전화번호로 매칭해서 카페24 업로드용 CSV를 만들어줍니다</small>
+    </div>
   </div>
 </div>
 
@@ -386,7 +397,7 @@ select.modal-sel option{background:var(--sur2);}
 
 <script>
 const STD = [
-  {k:'order_no',l:'주문번호'},{k:'receiver',l:'수취인'},{k:'phone',l:'연락처'},
+  {k:'order_no',l:'주문번호'},{k:'item_order_no',l:'품목별 주문번호'},{k:'receiver',l:'수취인'},{k:'phone',l:'연락처'},
   {k:'phone2',l:'연락처2'},{k:'address',l:'주소'},{k:'address_detail',l:'상세주소'},
   {k:'zipcode',l:'우편번호'},{k:'product_name',l:'상품명'},{k:'product_option',l:'옵션'},
   {k:'quantity',l:'수량'},{k:'memo',l:'배송메모'},{k:'invoice_no',l:'송장번호'},
@@ -435,6 +446,7 @@ function initDB() {
     columns: ['쇼핑몰','주문번호','배송메시지','주문상품명','주문상품명(옵션포함)','수량','수령인','수령인 휴대전화','수령인 우편번호','수령인 주소','수령인 상세 주소','수령인 주소(전체)'],
     mapping: {
       order_no: '주문번호',
+      item_order_no: '품목별 주문번호',
       receiver: '수령인',
       phone: '수령인 휴대전화',
       zipcode: '수령인 우편번호',
@@ -772,9 +784,54 @@ function convertWork() {
     const key = Object.entries(courier.mapping).find(([k,v])=>v===ch)?.[0];
     return key ? (std[key]??'') : '';
   }));
+  function normPhone(p){ return (p||'').replace(/\D/g,''); }
+  try {
+    const matchTable = JSON.parse(localStorage.getItem('trackingMatchTable')||'[]');
+    allRows.forEach(std=>{
+      if(!std.order_no) return;
+      matchTable.push({
+        phone: normPhone(std.phone),
+        name: std.receiver||'',
+        orderNo: std.order_no,
+        itemOrderNo: std.item_order_no||std.order_no,
+        ts: Date.now()
+      });
+    });
+    localStorage.setItem('trackingMatchTable', JSON.stringify(matchTable.slice(-3000)));
+  } catch(e){ console.error('매칭테이블 저장 실패', e); }
   const filename = `${courier.name}_${biz.name}_${today()}.xlsx`;
   dlXlsx([crHeaders,...outRows], filename);
   toast(filename+' 다운로드!','ok');
+}
+
+function handleTrackingFile(input){ if(input.files[0]) processTrackingFile(input.files[0]); }
+function processTrackingFile(file){
+  readXlsx(file, (headers, data) => {
+    const ci = {}; headers.forEach((h,i)=>ci[h]=i);
+    const phoneIdx = ci['받는분전화번호'] ?? ci['전화번호1'] ?? ci['받는사람 전화번호'] ?? ci['받는사람전화번호'];
+    const nameIdx = ci['받는분성명'] ?? ci['받는사람'];
+    const trackIdx = ci['운송장 번호'] ?? ci['운송장번호'];
+    if(trackIdx===undefined || phoneIdx===undefined){
+      toast('전화번호/운송장번호 컬럼을 찾을 수 없습니다','err'); return;
+    }
+    function normPhone(p){ return (p||'').replace(/\D/g,''); }
+    const matchTable = JSON.parse(localStorage.getItem('trackingMatchTable')||'[]');
+    const outRows = []; let matched=0, unmatched=0;
+    data.forEach(row=>{
+      const trackNo = row[trackIdx];
+      if(!trackNo) return;
+      const phone = normPhone(row[phoneIdx]);
+      const name = nameIdx!==undefined ? row[nameIdx] : '';
+      const found = matchTable.slice().reverse().find(m=>m.phone===phone && (!name || m.name===name)) ||
+                    matchTable.slice().reverse().find(m=>m.phone===phone);
+      if(found){ outRows.push([found.orderNo, found.itemOrderNo, String(trackNo)]); matched++; }
+      else { unmatched++; }
+    });
+    if(!outRows.length){ toast('매칭된 주문이 없습니다. ①에서 변환한 기록이 있어야 합니다','err'); return; }
+    const filename = '카페24_운송장업로드_'+today()+'.csv';
+    dlCsv([['주문번호','품목별 주문번호','운송장번호'],...outRows], filename);
+    toast(filename+' 다운로드! (매칭 '+matched+'건'+(unmatched?', 미매칭 '+unmatched+'건':'')+')', unmatched?'err':'ok');
+  });
 }
 
 // ── 송장→플랫폼 ──
@@ -1200,6 +1257,15 @@ function aoaToSheetStrict(data) {
   });
   ws['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:maxR,c:maxC}});
   return ws;
+}
+function dlCsv(rows, filename){
+  const csv = rows.map(r => r.map(v => '"' + String(v??'').replace(/"/g,'""') + '"').join(',')).join('\r\n');
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 function dlXlsx(data, filename) {
   const wb=XLSX.utils.book_new();
