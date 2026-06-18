@@ -230,16 +230,6 @@ select.modal-sel option{background:var(--sur2);}
       변환 · 다운로드
     </button>
 
-    <div class="divider"></div>
-
-    <div class="rp-section">
-      <div class="rp-title">③ 운송장번호 → 카페24 업로드</div>
-      <input type="file" id="w-tracking-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleTrackingFile(this)">
-      <button class="btn btn-full" onclick="document.getElementById('w-tracking-input').click()" style="margin-bottom:6px">
-        택배사 결과파일 업로드 (운송장번호 채워진 것)
-      </button>
-      <small style="color:#888;font-size:12px">① 변환 기록을 전화번호로 매칭해서 카페24 업로드용 CSV를 만들어줍니다</small>
-    </div>
   </div>
 </div>
 
@@ -285,6 +275,11 @@ select.modal-sel option{background:var(--sur2);}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
       플랫폼별 분리 · 다운로드
     </button>
+    <div class="divider"></div>
+    <button class="btn btn-full" onclick="generateCafe24TrackingFromInvoice()">
+      카페24 운송장 업로드 CSV 생성
+    </button>
+    <small style="color:#888;font-size:12px;display:block;margin-top:6px">위에서 업로드한 송장 엑셀을 ①의 변환 기록(전화번호 매칭)과 연결해서 카페24 운송장 일괄등록용 CSV를 만듭니다</small>
   </div>
 </div>
 
@@ -804,36 +799,6 @@ function convertWork() {
   toast(filename+' 다운로드!','ok');
 }
 
-function handleTrackingFile(input){ if(input.files[0]) processTrackingFile(input.files[0]); }
-function processTrackingFile(file){
-  readXlsx(file, (headers, data) => {
-    const ci = {}; headers.forEach((h,i)=>ci[h]=i);
-    const phoneIdx = ci['받는분전화번호'] ?? ci['전화번호1'] ?? ci['받는사람 전화번호'] ?? ci['받는사람전화번호'];
-    const nameIdx = ci['받는분성명'] ?? ci['받는사람'];
-    const trackIdx = ci['운송장 번호'] ?? ci['운송장번호'];
-    if(trackIdx===undefined || phoneIdx===undefined){
-      toast('전화번호/운송장번호 컬럼을 찾을 수 없습니다','err'); return;
-    }
-    function normPhone(p){ return (p||'').replace(/\D/g,''); }
-    const matchTable = JSON.parse(localStorage.getItem('trackingMatchTable')||'[]');
-    const outRows = []; let matched=0, unmatched=0;
-    data.forEach(row=>{
-      const trackNo = row[trackIdx];
-      if(!trackNo) return;
-      const phone = normPhone(row[phoneIdx]);
-      const name = nameIdx!==undefined ? row[nameIdx] : '';
-      const found = matchTable.slice().reverse().find(m=>m.phone===phone && (!name || m.name===name)) ||
-                    matchTable.slice().reverse().find(m=>m.phone===phone);
-      if(found){ outRows.push([found.orderNo, found.itemOrderNo, String(trackNo)]); matched++; }
-      else { unmatched++; }
-    });
-    if(!outRows.length){ toast('매칭된 주문이 없습니다. ①에서 변환한 기록이 있어야 합니다','err'); return; }
-    const filename = '카페24_운송장업로드_'+today()+'.csv';
-    dlCsv([['주문번호','품목별 주문번호','운송장번호'],...outRows], filename);
-    toast(filename+' 다운로드! (매칭 '+matched+'건'+(unmatched?', 미매칭 '+unmatched+'건':'')+')', unmatched?'err':'ok');
-  });
-}
-
 // ── 송장→플랫폼 ──
 let I = { bizId:null, courierId:null, headers:null, data:null };
 
@@ -898,6 +863,30 @@ function convertInvoice() {
        <button class="btn btn-ghost" onclick="dlZip()">↓ 전체 ZIP 다운로드</button>
      </div>`;
   toast('변환 완료!','ok');
+}
+
+function generateCafe24TrackingFromInvoice(){
+  if(!I.courierId) return toast('택배사를 선택하세요','err');
+  if(!I.data) return toast('송장 엑셀을 업로드하세요','err');
+  const courier = DB.couriers.find(c=>c.id===I.courierId);
+  if(!courier?.mapping) return toast('택배사 컬럼 매핑을 설정하세요','err');
+  const ci = {}; I.headers.forEach((h,i)=>ci[h]=i);
+  function normPhone(p){ return (p||'').replace(/\D/g,''); }
+  const matchTable = JSON.parse(localStorage.getItem('trackingMatchTable')||'[]');
+  const outRows = []; let matched=0, unmatched=0;
+  I.data.forEach(row=>{
+    const std = extractStd(row, ci, courier.mapping);
+    if(!std.invoice_no) return;
+    const phone = normPhone(std.phone);
+    const found = matchTable.slice().reverse().find(m=>m.phone===phone && (!std.receiver || m.name===std.receiver)) ||
+                  matchTable.slice().reverse().find(m=>m.phone===phone);
+    if(found){ outRows.push([found.orderNo, found.itemOrderNo, String(std.invoice_no)]); matched++; }
+    else { unmatched++; }
+  });
+  if(!outRows.length){ toast('매칭된 주문이 없습니다. ①에서 변환한 기록이 있어야 합니다','err'); return; }
+  const filename = '카페24_운송장업로드_'+today()+'.csv';
+  dlCsv([['주문번호','품목별 주문번호','운송장번호'],...outRows], filename);
+  toast(filename+' 다운로드! (매칭 '+matched+'건'+(unmatched?', 미매칭 '+unmatched+'건':'')+')', unmatched?'err':'ok');
 }
 
 async function dlZip() {
