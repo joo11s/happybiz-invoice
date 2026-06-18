@@ -887,12 +887,12 @@ function generateCafe24TrackingFromInvoice(){
     const phone = normPhone(std.phone);
     const found = matchTable.slice().reverse().find(m=>m.phone===phone && (!std.receiver || m.name===std.receiver)) ||
                   matchTable.slice().reverse().find(m=>m.phone===phone);
-    if(found){ outRows.push([found.orderNo, found.itemOrderNo, String(std.invoice_no)]); matched++; }
+    if(found){ outRows.push([found.orderNo, found.itemOrderNo, String(std.invoice_no), '1']); matched++; }
     else { unmatched++; }
   });
   if(!outRows.length){ toast('매칭된 주문이 없습니다. ①에서 변환한 기록이 있어야 합니다','err'); return; }
   const filename = '카페24_운송장업로드_'+today()+'.csv';
-  dlCsv([['주문번호','품목별 주문번호','운송장번호'],...outRows], filename);
+  dlCsv([['주문번호','품목별 주문번호','운송장번호','수량'],...outRows], filename);
   toast(filename+' 다운로드! (매칭 '+matched+'건'+(unmatched?', 미매칭 '+unmatched+'건':'')+')', unmatched?'err':'ok');
 }
 
