@@ -1120,19 +1120,43 @@ function parseCSV(text) {
   return { headers, rows };
 }
 
+function decodeCsvBuffer(buf) {
+  const bytes = new Uint8Array(buf);
+  // BOM 체크
+  if (bytes[0]===0xEF && bytes[1]===0xBB && bytes[2]===0xBF) {
+    return new TextDecoder('utf-8').decode(bytes.slice(3));
+  }
+  if (bytes[0]===0xFF && bytes[1]===0xFE) {
+    return new TextDecoder('utf-16le').decode(bytes.slice(2));
+  }
+  if (bytes[0]===0xFE && bytes[1]===0xFF) {
+    return new TextDecoder('utf-16be').decode(bytes.slice(2));
+  }
+  // BOM 없음: UTF-8로 엄격 디코딩 시도, 실패하면(=EUC-KR일 가능성 높음) EUC-KR로 디코딩
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch (e) {
+    try {
+      return new TextDecoder('euc-kr').decode(bytes);
+    } catch (e2) {
+      return new TextDecoder('utf-8').decode(bytes); // 최후 fallback
+    }
+  }
+}
+
 function readXlsx(file, cb) {
   const isCSV = file.name.toLowerCase().endsWith('.csv');
   if (isCSV) {
     const reader = new FileReader();
     reader.onload = e => {
-      const { headers, rows } = parseCSV(e.target.result);
-      // Convert rows (array of objects) to array-of-arrays format compatible with existing code
+      const text = decodeCsvBuffer(e.target.result);
+      const { headers, rows } = parseCSV(text);
       const ci = {};
       headers.forEach((h, i) => { ci[h] = i; });
       const dataRows = rows.map(obj => headers.map(h => obj[h] !== undefined ? obj[h] : ''));
       cb(headers, dataRows.filter(r => r.some(c => c !== undefined && c !== '')));
     };
-    reader.readAsText(file, 'UTF-8');
+    reader.readAsArrayBuffer(file);
   } else {
     const reader=new FileReader();
     reader.onload=e=>{
