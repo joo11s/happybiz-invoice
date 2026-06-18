@@ -438,7 +438,7 @@ function initDB() {
       receiver: '수령인',
       phone: '수령인 휴대전화',
       zipcode: '수령인 우편번호',
-      address: '수령인 주소(전체)',
+      address: '수령인 주소',
       address_detail: '수령인 상세 주소',
       product_name: '주문상품명',
       product_option: '주문상품명(옵션포함)',
@@ -1083,6 +1083,11 @@ function delCourier(id) {
 function extractStd(row, ci, mapping) {
   const std={};
   STD.forEach(f=>{const col=mapping[f.k]; if(col&&ci[col]!==undefined) std[f.k]=row[ci[col]];});
+  // 상세주소가 따로 있고 주소 본문에 이미 포함 안 되어 있으면 합쳐줌
+  // (택배사 매핑엔 address_detail 필드가 따로 없는 경우가 많아서, 누락 방지용)
+  if (std.address_detail && std.address && !std.address.includes(std.address_detail)) {
+    std.address = (std.address + ' ' + std.address_detail).trim();
+  }
   return std;
 }
 function parseCSV(text) {
