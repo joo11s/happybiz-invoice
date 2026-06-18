@@ -810,6 +810,12 @@ function renderInvBizBar() {
 }
 
 function handleInvFile(input) { if(input.files[0]) processInvFile(input.files[0]); }
+function handleDrop(event, zoneId) {
+  event.preventDefault();
+  event.currentTarget?.classList.remove('drag');
+  const file = event.dataTransfer.files[0];
+  if(file) processInvFile(file);
+}
 function processInvFile(file) {
   readXlsx(file, (headers,data) => {
     I.headers=headers; I.data=data;
@@ -829,8 +835,9 @@ function convertInvoice() {
   const stdRows = I.data.map(row => extractStd(row, ci, courier.mapping));
   const platforms = DB.platforms;
   const grouped = {};
+  const singlePf = platforms.length===1 ? platforms[0].name : null;
   stdRows.forEach(std => {
-    const pfName = std.platform||'기타';
+    const pfName = singlePf || std.platform || '기타';
     if(!grouped[pfName]) grouped[pfName]=[];
     grouped[pfName].push(std);
   });
