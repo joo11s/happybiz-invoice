@@ -779,21 +779,6 @@ function convertWork() {
     const key = Object.entries(courier.mapping).find(([k,v])=>v===ch)?.[0];
     return key ? (std[key]??'') : '';
   }));
-  function normPhone(p){ return (p||'').replace(/\D/g,''); }
-  try {
-    const matchTable = JSON.parse(localStorage.getItem('trackingMatchTable')||'[]');
-    allRows.forEach(std=>{
-      if(!std.order_no) return;
-      matchTable.push({
-        phone: normPhone(std.phone),
-        name: std.receiver||'',
-        orderNo: std.order_no,
-        itemOrderNo: std.item_order_no||std.order_no,
-        ts: Date.now()
-      });
-    });
-    localStorage.setItem('trackingMatchTable', JSON.stringify(matchTable.slice(-3000)));
-  } catch(e){ console.error('매칭테이블 저장 실패', e); }
   const filename = `${courier.name}_${biz.name}_${today()}.xlsx`;
   dlXlsx([crHeaders,...outRows], filename);
   toast(filename+' 다운로드!','ok');
@@ -873,27 +858,30 @@ function convertInvoice() {
 }
 
 function generateCafe24TrackingFromInvoice(){
-  if(!I.courierId) return toast('택배사를 선택하세요','err');
   if(!I.data) return toast('송장 엑셀을 업로드하세요','err');
-  const courier = DB.couriers.find(c=>c.id===I.courierId);
-  if(!courier?.mapping) return toast('택배사 컬럼 매핑을 설정하세요','err');
   const ci = {}; I.headers.forEach((h,i)=>ci[h]=i);
-  function normPhone(p){ return (p||'').replace(/\D/g,''); }
-  const matchTable = JSON.parse(localStorage.getItem('trackingMatchTable')||'[]');
-  const outRows = []; let matched=0, unmatched=0;
+  function findCol(...names){
+    for(const n of names){ if(ci[n]!==undefined) return ci[n]; }
+    return undefined;
+  }
+  const orderIdx = findCol('주문번호');
+  const itemOrderIdx = findCol('품목별 주문번호','품목별주문번호');
+  const trackIdx = findCol('운송장 번호','운송장번호','송장번호');
+  const qtyIdx = findCol('수량','내품수량');
+  if(orderIdx===undefined || itemOrderIdx===undefined || trackIdx===undefined){
+    toast('업로드한 파일에서 주문번호/품목별 주문번호/운송장번호 컬럼을 찾을 수 없습니다','err'); return;
+  }
+  const outRows = [];
   I.data.forEach(row=>{
-    const std = extractStd(row, ci, courier.mapping);
-    if(!std.invoice_no) return;
-    const phone = normPhone(std.phone);
-    const found = matchTable.slice().reverse().find(m=>m.phone===phone && (!std.receiver || m.name===std.receiver)) ||
-                  matchTable.slice().reverse().find(m=>m.phone===phone);
-    if(found){ outRows.push([found.orderNo, found.itemOrderNo, String(std.invoice_no), '1']); matched++; }
-    else { unmatched++; }
+    const trackNo = row[trackIdx];
+    if(!trackNo) return;
+    const qty = qtyIdx!==undefined ? (row[qtyIdx]||'1') : '1';
+    outRows.push([row[orderIdx], row[itemOrderIdx], String(trackNo), String(qty)]);
   });
-  if(!outRows.length){ toast('매칭된 주문이 없습니다. ①에서 변환한 기록이 있어야 합니다','err'); return; }
+  if(!outRows.length){ toast('운송장번호가 입력된 행이 없습니다','err'); return; }
   const filename = '카페24_운송장업로드_'+today()+'.csv';
   dlCsv([['주문번호','품목별 주문번호','운송장번호','수량'],...outRows], filename);
-  toast(filename+' 다운로드! (매칭 '+matched+'건'+(unmatched?', 미매칭 '+unmatched+'건':'')+')', unmatched?'err':'ok');
+  toast(filename+' 다운로드! ('+outRows.length+'건)','ok');
 }
 
 async function dlZip() {
