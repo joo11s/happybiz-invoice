@@ -1090,6 +1090,13 @@ function extractStd(row, ci, mapping) {
   }
   return std;
 }
+function stripFormulaPrefix(v) {
+  // Excel formula prefix (e.g. ="06509" → 06509) that appears literally in CSV / uncached XLSX cells
+  if (typeof v === 'string' && /^=+\d+$/.test(v)) {
+    return v.replace(/^=+/, '');
+  }
+  return v;
+}
 function parseCSV(text) {
   // Remove BOM if present
   text = text.replace(/^\uFEFF/, '');
@@ -1116,13 +1123,6 @@ function parseCSV(text) {
   }
 
   const headers = parseLine(lines[0]);
-  function stripFormulaPrefix(v) {
-    if (typeof v === 'string' && /^=+\d+$/.test(v)) {
-      return v.replace(/^=+/, '');
-    }
-    return v;
-  }
-
   const rows = lines.slice(1).map(l => {
     const vals = parseLine(l);
     const obj = {};
@@ -1175,7 +1175,8 @@ function readXlsx(file, cb) {
       const wb=XLSX.read(e.target.result,{type:'array'});
       const ws=wb.Sheets[wb.SheetNames[0]];
       const json=XLSX.utils.sheet_to_json(ws,{header:1});
-      cb(json[0]||[], json.slice(1).filter(r=>r.some(c=>c!==undefined&&c!=='')));
+      const cleaned=json.map(r=>Array.isArray(r)?r.map(stripFormulaPrefix):r);
+      cb(cleaned[0]||[], cleaned.slice(1).filter(r=>r.some(c=>c!==undefined&&c!=='')));
     };
     reader.readAsArrayBuffer(file);
   }
