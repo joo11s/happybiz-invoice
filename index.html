@@ -1116,10 +1116,17 @@ function parseCSV(text) {
   }
 
   const headers = parseLine(lines[0]);
+  function stripFormulaPrefix(v) {
+    if (typeof v === 'string' && /^=+\d+$/.test(v)) {
+      return v.replace(/^=+/, '');
+    }
+    return v;
+  }
+
   const rows = lines.slice(1).map(l => {
     const vals = parseLine(l);
     const obj = {};
-    headers.forEach((h, i) => { obj[h] = vals[i] !== undefined ? vals[i] : ''; });
+    headers.forEach((h, i) => { obj[h] = stripFormulaPrefix(vals[i] !== undefined ? vals[i] : ''); });
     return obj;
   });
   return { headers, rows };
