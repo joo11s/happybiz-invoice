@@ -848,7 +848,7 @@ async function dlZip() {
   const zip = new JSZip();
   files.forEach(f => {
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(f.sheetData);
+    const ws = aoaToSheetStrict(f.sheetData);
     XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
     zip.file(f.filename, XLSX.write(wb,{bookType:'xlsx',type:'array'}));
   });
@@ -1144,9 +1144,29 @@ function readXlsx(file, cb) {
     reader.readAsArrayBuffer(file);
   }
 }
+function aoaToSheetStrict(data) {
+  // Convert AOA to worksheet, forcing string type for all non-header string cells
+  // to prevent SheetJS from converting numeric-looking strings (e.g. zipcodes like "06509") to numbers
+  const ws = {};
+  let maxR = 0, maxC = 0;
+  data.forEach((row, R) => {
+    row.forEach((val, C) => {
+      const addr = XLSX.utils.encode_cell({r: R, c: C});
+      if (R === 0 || typeof val !== 'string') {
+        ws[addr] = {v: val};
+      } else {
+        ws[addr] = {t: 's', v: val};
+      }
+      if (C > maxC) maxC = C;
+    });
+    if (R > maxR) maxR = R;
+  });
+  ws['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:maxR,c:maxC}});
+  return ws;
+}
 function dlXlsx(data, filename) {
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), 'Sheet1');
+  XLSX.utils.book_append_sheet(wb, aoaToSheetStrict(data), 'Sheet1');
   XLSX.writeFile(wb, filename);
 }
 function today(){ return new Date().toISOString().slice(0,10).replace(/-/g,''); }
