@@ -765,9 +765,11 @@ function convertWork() {
     });
   }
   if(!allRows.length) return toast('업로드된 파일이 없습니다','err');
-  const crHeaders = courier.columns;
+  const crHeaders = [...courier.columns, '주문번호', '품목별 주문번호'];
   const fixedVals = courier.fixedValues || {};
   const outRows = allRows.map(std => crHeaders.map(ch => {
+    if (ch === '주문번호') return std.order_no ?? '';
+    if (ch === '품목별 주문번호') return std.item_order_no ?? std.order_no ?? '';
     // fixedValues 우선 적용
     if (ch in fixedVals) {
       const fv = fixedVals[ch];
