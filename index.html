@@ -619,7 +619,7 @@ function renderWorkPfArea() {
     el.innerHTML=`<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg><p>등록된 플랫폼이 없습니다</p><small>설정 탭에서 플랫폼을 추가하세요</small></div>`;
     return;
   }
-  const pfHTML = platforms.map(p => {
+  const pfHTML = platforms.filter(p => p.id !== 'platform-cafe24').map(p => {
     const fd = W.pfFiles[p.id];
     return `<div class="pf-item" id="pfi-${p.id}">
       <div class="pf-item-header">
@@ -660,7 +660,7 @@ function renderWorkPfArea() {
       <div class="unified-label">
         <div class="pf-dot ${unifiedFd?'done':''}"></div>
         통합 엑셀
-        <span class="tag">여러 플랫폼 주문이 섞인 엑셀</span>
+        <span class="tag">카페24 (스마트스토어/쿠팡 등 마켓플러스 통합)</span>
         ${unifiedFd ? `<span class="badge badge-green">${W.unifiedData.length}건</span>` : ''}
       </div>
       ${unifiedFd ? `<button class="btn btn-sm btn-danger" onclick="clearUnified()">×</button>` : ''}
@@ -675,8 +675,8 @@ function renderWorkPfArea() {
           ondrop="handleUnifiedDrop(event)">
           <div class="pf-drop-inner">
             <img class="pf-drop-icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c9a84c' stroke-width='1.5'%3E%3Cpath d='M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z'/%3E%3C/svg%3E">
-            <p>통합 주문 엑셀 드래그 or 클릭</p>
-            <small>위 카페24 카드에 이미 올리셨다면 여기는 비워두셔도 됩니다 · .xlsx / .xls / .csv</small>
+            <p>카페24 주문 엑셀 드래그 or 클릭</p>
+            <small>카페24 주문(스마트스토어/쿠팡 등 마켓플러스 채널 포함) 업로드 · .xlsx / .xls / .csv</small>
           </div>
         </div>
         <input type="file" id="w-unified-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleUnified(this)">`
