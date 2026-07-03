@@ -726,7 +726,7 @@ function runPoolMatch(headers, data) {
     }
     const e = remain[matchIdx];
     const qty = rQtyIdx !== undefined ? (row[rQtyIdx] || e.qty || '1') : (e.qty || '1');
-    outRows.push([e.order_no, e.item_order_no, String(trackNo), String(qty)]);
+    outRows.push([e.order_no, e.item_order_no, String(trackNo).replace(/[^0-9]/g, ''), String(qty)]);
   });
 
   // 사용된 항목 제거 후 풀 갱신
