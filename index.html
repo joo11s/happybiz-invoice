@@ -725,8 +725,7 @@ function runPoolMatch(headers, data) {
       return;
     }
     const e = remain[matchIdx];
-    const qty = rQtyIdx !== undefined ? (row[rQtyIdx] || e.qty || '1') : (e.qty || '1');
-    outRows.push([e.order_no, e.item_order_no, String(trackNo).replace(/[^0-9]/g, ''), String(qty)]);
+    outRows.push([e.order_no, e.item_order_no, String(trackNo).replace(/[^0-9]/g, '')]);
   });
 
   // 사용된 항목 제거 후 풀 갱신
@@ -775,7 +774,7 @@ function dlC4TrackingCsv() {
   const rows = window._c4MatchedRows;
   if (!rows?.length) return;
   const filename = '카페24_운송장업로드_' + today() + '.csv';
-  dlCsv([['주문번호', '품목별 주문번호', '운송장번호', '수량'], ...rows], filename);
+  dlCsv([['주문번호', '품목별 주문번호', '운송장번호'], ...rows], filename);
   toast(filename + ' 다운로드!', 'ok');
 }
 
