@@ -279,7 +279,7 @@ select.modal-sel option{background:var(--sur2);}
     <button class="btn btn-full" onclick="generateCafe24TrackingFromInvoice()">
       카페24 운송장 업로드 CSV 생성
     </button>
-    <small style="color:#888;font-size:12px;display:block;margin-top:6px">위에서 업로드한 송장 엑셀을 ①의 변환 기록(전화번호 매칭)과 연결해서 카페24 운송장 일괄등록용 CSV를 만듭니다</small>
+    <small style="color:#888;font-size:12px;display:block;margin-top:6px">위에서 업로드한 송장 엑셀에서 주문번호/품목별 주문번호/운송장번호 컬럼을 그대로 읽어 카페24 운송장 일괄등록용 CSV를 만듭니다 (①에서 다운받은 파일을 그대로 다시 업로드하세요)</small>
   </div>
 </div>
 
@@ -466,6 +466,7 @@ function initDB() {
     name: 'CJ대한통운',
     columns: ['보내는분성명','보내는분전화번호','보내는분주소(전체, 분할)','받는분성명','받는분전화번호','받는분우편번호','받는분주소(전체, 분할)','배송메세지1','품목명','내품명','박스타입','내품수량','박스수량','운송장 번호'],
     mapping: {
+      order_no: '주문번호',
       receiver: '받는분성명',
       phone: '받는분전화번호',
       zipcode: '받는분우편번호',
