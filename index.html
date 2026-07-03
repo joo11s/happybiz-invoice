@@ -251,14 +251,27 @@ select.modal-sel option{background:var(--sur2);}
       <div id="i-courier-status"></div>
     </div>
 
-    <div class="section-title" style="margin-bottom:10px">송장 엑셀 업로드</div>
+    <div class="section-title" style="margin-bottom:10px">① 원본 발송요청 파일 (주문번호 포함)</div>
+    <div class="upload-zone" id="i-orig-drop-zone" onclick="document.getElementById('i-orig-file').click()"
+      ondragover="event.preventDefault();this.classList.add('drag')"
+      ondragenter="event.preventDefault()"
+      ondragleave="this.classList.remove('drag')"
+      ondrop="handleOrigDrop(event)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+      <p>①에서 다운받은 원본 파일</p>
+      <small>드래그하거나 클릭해서 선택</small>
+    </div>
+    <input type="file" id="i-orig-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleOrigInvFile(this)">
+    <div id="i-orig-file-result"></div>
+
+    <div class="section-title" style="margin-bottom:10px;margin-top:16px">② 택배사 접수결과 파일 (운송장번호 포함)</div>
     <div class="upload-zone" id="i-drop-zone" onclick="document.getElementById('i-file').click()"
       ondragover="event.preventDefault();this.classList.add('drag')"
       ondragenter="event.preventDefault()"
       ondragleave="this.classList.remove('drag')"
       ondrop="handleDrop(event,'i-file-handler')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-      <p>송장번호 입력된 택배사 엑셀</p>
+      <p>CJ "파일접수 상세내역" 등 결과 파일</p>
       <small>드래그하거나 클릭해서 선택</small>
     </div>
     <input type="file" id="i-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleInvFile(this)">
@@ -279,7 +292,7 @@ select.modal-sel option{background:var(--sur2);}
     <button class="btn btn-full" onclick="generateCafe24TrackingFromInvoice()">
       카페24 운송장 업로드 CSV 생성
     </button>
-    <small style="color:#888;font-size:12px;display:block;margin-top:6px">위에서 업로드한 송장 엑셀에서 주문번호/품목별 주문번호/운송장번호 컬럼을 그대로 읽어 카페24 운송장 일괄등록용 CSV를 만듭니다 (①에서 다운받은 파일을 그대로 다시 업로드하세요)</small>
+    <small style="color:#888;font-size:12px;display:block;margin-top:6px">①원본 파일과 ②접수결과 파일을 전화번호+주소로 매칭해서 카페24 운송장 일괄등록용 CSV를 만듭니다 (택배사가 자체 포맷으로 파일을 재생성해도 매칭 가능)</small>
   </div>
 </div>
 
@@ -788,7 +801,7 @@ function convertWork() {
 }
 
 // ── 송장→플랫폼 ──
-let I = { bizId:null, courierId:null, headers:null, data:null };
+let I = { bizId:null, courierId:null, headers:null, data:null, origHeaders:null, origData:null };
 
 function renderInvBizBar() {
   const sel = document.getElementById('i-biz-sel');
@@ -798,6 +811,20 @@ function renderInvBizBar() {
 }
 
 function handleInvFile(input) { if(input.files[0]) processInvFile(input.files[0]); }
+function handleOrigInvFile(input) { if(input.files[0]) processOrigInvFile(input.files[0]); }
+function handleOrigDrop(event) {
+  event.preventDefault();
+  event.currentTarget?.classList.remove('drag');
+  const file = event.dataTransfer.files[0];
+  if(file) processOrigInvFile(file);
+}
+function processOrigInvFile(file) {
+  readXlsx(file, (headers,data) => {
+    I.origHeaders=headers; I.origData=data;
+    document.getElementById('i-orig-file-result').innerHTML =
+      `<div class="file-done-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>${file.name} · ${data.length}건</div>`;
+  });
+}
 function handleDrop(event, zoneId) {
   event.preventDefault();
   event.currentTarget?.classList.remove('drag');
@@ -860,31 +887,67 @@ function convertInvoice() {
   toast('변환 완료!','ok');
 }
 
+function normPhoneCC(v){ return String(v||'').replace(/\D/g,''); }
+function normAddrCC(v){ return String(v||'').replace(/\s+/g,'').trim(); }
+
 function generateCafe24TrackingFromInvoice(){
-  if(!I.data) return toast('송장 엑셀을 업로드하세요','err');
+  if(!I.origData) return toast('①원본 발송요청 파일을 업로드하세요','err');
+  if(!I.data) return toast('②택배사 접수결과 파일을 업로드하세요','err');
+
+  function findCol(headerMap, ...names){ for(const n of names){ if(headerMap[n]!==undefined) return headerMap[n]; } return undefined; }
+
   const ci = {}; I.headers.forEach((h,i)=>ci[h]=i);
-  function findCol(...names){
-    for(const n of names){ if(ci[n]!==undefined) return ci[n]; }
-    return undefined;
+  const trackIdx = findCol(ci, '운송장 번호','운송장번호','송장번호');
+  const rPhoneIdx = findCol(ci, '받는분전화번호','전화번호1','수령인 휴대전화');
+  const rAddrIdx = findCol(ci, '받는분주소(전체, 분할)','받는분주소','주소','수령인 주소');
+  const rQtyIdx = findCol(ci, '내품수량','수량(A타입)','수량');
+  if(trackIdx===undefined){ toast('②접수결과 파일에서 운송장번호 컬럼을 찾을 수 없습니다','err'); return; }
+  if(rPhoneIdx===undefined){ toast('②접수결과 파일에서 전화번호 컬럼을 찾을 수 없습니다','err'); return; }
+
+  const oi = {}; I.origHeaders.forEach((h,i)=>oi[h]=i);
+  const oOrderIdx = findCol(oi, '주문번호');
+  const oItemOrderIdx = findCol(oi, '품목별 주문번호','품목별주문번호');
+  const oPhoneIdx = findCol(oi, '받는분전화번호','전화번호1','수령인 휴대전화');
+  const oAddrIdx = findCol(oi, '받는분주소(전체, 분할)','받는분주소','주소','수령인 주소');
+  const oQtyIdx = findCol(oi, '내품수량','수량(A타입)','수량');
+  if(oOrderIdx===undefined || oItemOrderIdx===undefined || oPhoneIdx===undefined){
+    toast('①원본 파일에서 주문번호/품목별 주문번호/전화번호 컬럼을 찾을 수 없습니다','err'); return;
   }
-  const orderIdx = findCol('주문번호');
-  const itemOrderIdx = findCol('품목별 주문번호','품목별주문번호');
-  const trackIdx = findCol('운송장 번호','운송장번호','송장번호');
-  const qtyIdx = findCol('수량','내품수량');
-  if(orderIdx===undefined || itemOrderIdx===undefined || trackIdx===undefined){
-    toast('업로드한 파일에서 주문번호/품목별 주문번호/운송장번호 컬럼을 찾을 수 없습니다','err'); return;
+
+  const qByPA = {}, qByP = {};
+  I.origData.forEach(row=>{
+    const phone = normPhoneCC(row[oPhoneIdx]);
+    const addr = normAddrCC(oAddrIdx!==undefined ? row[oAddrIdx] : '');
+    const entry = { order_no: row[oOrderIdx], item_order_no: row[oItemOrderIdx], qty: oQtyIdx!==undefined ? row[oQtyIdx] : '1', used:false };
+    const paKey = phone+'|'+addr;
+    (qByPA[paKey] = qByPA[paKey]||[]).push(entry);
+    (qByP[phone] = qByP[phone]||[]).push(entry);
+  });
+  function popFresh(queue){
+    while(queue && queue.length){
+      const e = queue.shift();
+      if(!e.used){ e.used = true; return e; }
+    }
+    return null;
   }
-  const outRows = [];
+
+  const outRows = []; let unmatched = 0;
   I.data.forEach(row=>{
     const trackNo = row[trackIdx];
     if(!trackNo) return;
-    const qty = qtyIdx!==undefined ? (row[qtyIdx]||'1') : '1';
-    outRows.push([row[orderIdx], row[itemOrderIdx], String(trackNo), String(qty)]);
+    const phone = normPhoneCC(row[rPhoneIdx]);
+    const addr = normAddrCC(rAddrIdx!==undefined ? row[rAddrIdx] : '');
+    const paKey = phone+'|'+addr;
+    let entry = popFresh(qByPA[paKey]) || popFresh(qByP[phone]);
+    if(!entry){ unmatched++; return; }
+    const qty = rQtyIdx!==undefined ? (row[rQtyIdx]||entry.qty||'1') : (entry.qty||'1');
+    outRows.push([entry.order_no, entry.item_order_no, String(trackNo), String(qty)]);
   });
-  if(!outRows.length){ toast('운송장번호가 입력된 행이 없습니다','err'); return; }
+
+  if(!outRows.length){ toast('매칭된 주문이 없습니다. 두 파일이 같은 배치인지 확인하세요','err'); return; }
   const filename = '카페24_운송장업로드_'+today()+'.csv';
   dlCsv([['주문번호','품목별 주문번호','운송장번호','수량'],...outRows], filename);
-  toast(filename+' 다운로드! ('+outRows.length+'건)','ok');
+  toast(filename+' 다운로드! ('+outRows.length+'건 매칭'+(unmatched?', '+unmatched+'건 매칭실패':'')+')','ok');
 }
 
 async function dlZip() {
