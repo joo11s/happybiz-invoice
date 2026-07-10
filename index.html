@@ -509,6 +509,34 @@ function initDB() {
   if (lotteIdx === -1) { db.couriers.push(lottePreset); }
   else { db.couriers[lotteIdx] = lottePreset; }
 
+  const hanjinPreset = {
+    id: 'courier-hanjin',
+    name: '한진택배',
+    columns: ['주문번호','주문자 성명','주문자 전화번호','품목명','박스수량','받는분성명','받는분전화번호','받는분기타연락처','주소','배송메세지','박스타입','송장번호','발송처','발송처연락처'],
+    mapping: {
+      order_no: '주문번호',
+      receiver: '받는분성명',
+      phone: '받는분전화번호',
+      phone2: '받는분기타연락처',
+      address: '주소',
+      product_name: '품목명',
+      quantity: '박스수량',
+      memo: '배송메세지',
+      invoice_no: '송장번호'
+    },
+    fixedValues: {
+      '주문자 성명': '__senderName__',
+      '주문자 전화번호': '__senderPhone__',
+      '발송처': '__senderName__',
+      '발송처연락처': '__senderPhone__',
+      '박스타입': '',
+      '송장번호': ''
+    }
+  };
+  const hanjinIdx = db.couriers.findIndex(c => c.id === 'courier-hanjin');
+  if (hanjinIdx === -1) { db.couriers.push(hanjinPreset); }
+  else { db.couriers[hanjinIdx] = hanjinPreset; }
+
   localStorage.setItem('icdb2', JSON.stringify(db));
   return db;
 }
