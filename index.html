@@ -682,15 +682,21 @@ function processC4OrderFile(file) {
 function convertC4Work() {
   if (!C4.bizId) return toast('사업자를 선택하세요', 'err');
   if (!C4.courierId) return toast('택배사를 선택하세요', 'err');
-  if (!C4.orderData) return toast('카페24 주문내역 파일을 업로드하세요', 'err');
+
+  // 패널에서 체크된 주문이 있으면 우선 사용, 없으면 파일 업로드 데이터 사용
+  const usePanel = C4._panelOrderData && C4._panelOrderData.length > 0;
+  const activeHeaders = usePanel ? C4._panelOrderHeaders : C4.orderHeaders;
+  const activeData = usePanel ? C4._panelOrderData : C4.orderData;
+
+  if (!activeData) return toast('카페24 주문내역 파일을 업로드하거나 왼쪽 패널에서 주문을 선택하세요', 'err');
   const biz = DB.businesses.find(b => b.id === C4.bizId);
   const courier = DB.couriers.find(c => c.id === C4.courierId);
   if (!courier?.mapping) return toast('택배사 컬럼 매핑을 설정하세요', 'err');
   const cafe24Pf = DB.platforms.find(p => p.id === 'platform-cafe24');
   if (!cafe24Pf?.mapping) return toast('카페24 플랫폼 매핑이 없습니다. 설정을 확인하세요', 'err');
 
-  const ci = {}; C4.orderHeaders.forEach((h, i) => ci[h] = i);
-  const allRows = C4.orderData.map(row => {
+  const ci = {}; activeHeaders.forEach((h, i) => ci[h] = i);
+  const allRows = activeData.map(row => {
     const std = extractStd(row, ci, cafe24Pf.mapping);
     std.platform = '카페24';
     return std;
@@ -950,30 +956,34 @@ function renderC4OrderPanel() {
       '<span style="margin-left:auto;font-size:11px;color:var(--tx3)">' + C4Panel.checkedIds.size + '건 선택</span>' +
     '</div>' +
     '<div class="order-list-body">' + rowsHtml + '</div>' +
-    '<button class="btn btn-gold btn-full" style="margin-top:12px;flex-shrink:0" onclick="c4ConfirmOrders()">' +
+    '<button class="btn btn-gold btn-full" style="margin-top:12px;flex-shrink:0" onclick="c4DoConfirm()">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg>' +
       ' 발주확인 (' + C4Panel.checkedIds.size + '건)</button>';
 }
 
-function c4SetTab(tab) { C4Panel.activeTab = tab; C4Panel.checkedIds = new Set(); renderC4OrderPanel(); }
+function c4SetTab(tab) { C4Panel.activeTab = tab; renderC4OrderPanel(); }
 function c4RowClick(oid) { c4CheckOrder(oid, !C4Panel.checkedIds.has(oid)); }
 function c4CheckOrder(oid, checked) {
   if (checked) C4Panel.checkedIds.add(oid); else C4Panel.checkedIds.delete(oid);
+  c4PrepareOrderData();
   renderC4OrderPanel();
 }
 function c4SelectAll(checked) {
   c4FilteredOrders().forEach(o => checked ? C4Panel.checkedIds.add(o.order_id) : C4Panel.checkedIds.delete(o.order_id));
+  c4PrepareOrderData();
   renderC4OrderPanel();
 }
 
-function c4ConfirmOrders() {
-  if (!C4.bizId) return toast('사업자를 선택하세요', 'err');
-  if (!C4.courierId) return toast('STEP A에서 택배사를 먼저 선택하세요', 'err');
-  if (C4Panel.checkedIds.size === 0) return toast('발주확인할 주문을 선택하세요', 'err');
+// 체크된 주문들을 C4.orderHeaders / C4.orderData 에 채워넣는 함수
+function c4PrepareOrderData() {
   const selected = C4Panel.orders.filter(o => C4Panel.checkedIds.has(o.order_id));
-  if (!selected.length) return toast('선택된 주문이 없습니다', 'err');
+  if (!selected.length) {
+    // 체크 해제 시 패널 데이터 초기화 (파일 업로드 데이터는 건드리지 않음)
+    C4._panelOrderHeaders = null;
+    C4._panelOrderData = null;
+    return;
+  }
 
-  // 카페24 플랫폼 매핑의 컬럼명으로 행 구성 → extractStd가 그대로 파싱
   const headers = ['주문번호', '품목별 주문번호', '수령인', '수령인 휴대전화', '수령인 우편번호', '수령인 주소', '수령인 상세 주소', '주문상품명', '주문상품명(옵션포함)', '수량', '배송메시지'];
   const rows = selected.map(order => {
     const r = (order.receivers && order.receivers[0]) || {};
@@ -993,12 +1003,14 @@ function c4ConfirmOrders() {
     ];
   });
 
-  C4.orderHeaders = headers;
-  C4.orderData = rows;
-  C4.orderName = 'API_소울스토어_' + selected.length + '건';
-  document.getElementById('c4-order-result').innerHTML =
-    '<div class="file-done-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>API에서 ' + selected.length + '건 불러옴</div>';
-  convertC4Work();
+  C4._panelOrderHeaders = headers;
+  C4._panelOrderData = rows;
+  C4._panelOrderName = 'API_소울스토어_' + selected.length + '건';
+}
+
+async function c4DoConfirm() {
+  /* TODO: 카페24 발주확인 API 연동 예정, 지금은 자리만 */
+  toast('발주확인 API 연동 예정', 'info');
 }
 
 // ── 정규화 함수 ──
