@@ -147,6 +147,30 @@ select.modal-sel option{background:var(--sur2);}
 .courier-item.on{border-color:var(--green);background:var(--gl);color:var(--green);}
 .courier-item.on .courier-check{opacity:1;}
 .courier-check{width:16px;height:16px;opacity:0;color:var(--green);}
+
+/* ── 카페24 2컬럼 레이아웃 ── */
+.c4-two-col{display:flex;height:calc(100vh - 52px);}
+.c4-left-panel{width:58%;border-right:1px solid var(--bdr);overflow:hidden;display:flex;flex-direction:column;padding:20px;gap:14px;}
+.c4-right-panel{width:42%;overflow-y:auto;padding:20px;}
+.c4-order-block{flex:1;display:flex;flex-direction:column;margin-bottom:0 !important;min-height:0;}
+#c4-order-panel-body{flex:1;display:flex;flex-direction:column;min-height:0;}
+
+/* 주문 상태 탭 */
+.order-status-tabs{display:flex;border-bottom:1px solid var(--bdr);overflow-x:auto;flex-shrink:0;}
+.order-status-tab{padding:8px 10px;font-size:11px;font-weight:500;cursor:pointer;color:var(--tx2);border:none;background:none;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;font-family:'Noto Sans KR',sans-serif;}
+.order-status-tab:hover{color:var(--tx);}
+.order-status-tab.active{color:var(--gold);border-bottom-color:var(--gold);}
+.o-tab-cnt{font-size:10px;background:var(--sur3);border-radius:8px;padding:1px 5px;margin-left:3px;color:var(--tx3);}
+.order-status-tab.active .o-tab-cnt{background:var(--gold-bg);color:var(--gold);}
+
+/* 주문 리스트 */
+.order-list-hdr{display:flex;align-items:center;gap:8px;padding:7px 12px;background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--rs) var(--rs) 0 0;font-size:11px;color:var(--tx2);margin-top:10px;flex-shrink:0;}
+.order-list-body{border:1px solid var(--bdr);border-top:none;border-radius:0 0 var(--rs) var(--rs);overflow-y:auto;flex:1;min-height:80px;}
+.order-row{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--bdr);cursor:pointer;transition:background .1s;}
+.order-row:last-child{border-bottom:none;}
+.order-row:hover{background:var(--sur3);}
+.order-row.chk-sel{background:var(--gold-bg);}
+.o-chk{width:14px;height:14px;accent-color:var(--gold);cursor:pointer;flex-shrink:0;}
 </style>
 </head>
 <body>
@@ -160,16 +184,31 @@ select.modal-sel option{background:var(--sur2);}
 
 <!-- 카페24 탭 -->
 <div id="tab-cafe24" class="tab-content active">
-  <div class="c4-layout">
-    <div class="c4-inner">
+  <div class="c4-two-col">
 
+    <!-- ▌왼쪽: 주문 패널 -->
+    <div class="c4-left-panel">
       <!-- 사업자 바 -->
-      <div class="biz-bar">
+      <div class="biz-bar" style="flex-shrink:0;margin-bottom:0">
         <select class="biz-select" id="c4-biz-sel" onchange="onC4BizChange()">
           <option value="">사업자 선택...</option>
         </select>
         <button class="btn-add-biz" onclick="openModal('m-add-biz')">+ 사업자 추가</button>
       </div>
+
+      <!-- 주문 패널 -->
+      <div class="step-block c4-order-block">
+        <div class="step-label">카페24 연동</div>
+        <div class="step-title" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--bdr)">
+          주문내역
+          <button class="btn btn-sm btn-ghost" onclick="fetchC4Orders()" style="font-size:11px">↻ 새로고침</button>
+        </div>
+        <div id="c4-order-panel-body"></div>
+      </div>
+    </div>
+
+    <!-- ▌오른쪽: STEP A + STEP B -->
+    <div class="c4-right-panel">
 
       <!-- 풀 카운터 -->
       <div class="pool-bar">
@@ -347,6 +386,19 @@ select.modal-sel option{background:var(--sur2);}
 <div class="toast" id="toast"></div>
 
 <script>
+// ── 카페24 배송상태 코드 매핑 (나중에 수정 가능하도록 상수로 분리) ──
+const C4_STATUS_MAP = {
+  X: '마켓발주전',
+  F: '배송준비중',
+  M: '배송중',
+  T: '배송완료',
+  W: '배송보류'
+};
+const C4_STATUS_TABS = ['입금전', '마켓발주전', '배송준비중', '배송대기', '배송중', '배송완료'];
+
+// 카페24 주문 패널 상태
+let C4Panel = { orders: [], loading: false, error: null, activeTab: '마켓발주전', checkedIds: new Set() };
+
 const PLATFORM_TABS = [
   {id:'cafe24', name:'카페24', ready:true},
   {id:'toss', name:'토스쇼핑', ready:false},
@@ -557,6 +609,7 @@ function renderCafe24() {
     DB.businesses.map(b => `<option value="${b.id}" ${b.id === C4.bizId ? 'selected' : ''}>${b.name}</option>`).join('');
   renderC4CourierDrop();
   updatePoolCounter();
+  renderC4OrderPanel();
 }
 
 function updatePoolCounter() {
@@ -571,6 +624,12 @@ function onC4BizChange() {
   document.getElementById('c4-order-result').innerHTML = '';
   document.getElementById('c4-match-result').innerHTML = '';
   updatePoolCounter();
+  C4Panel.orders = []; C4Panel.checkedIds = new Set(); C4Panel.error = null; C4Panel.loading = false;
+  if (C4.bizId) {
+    const selBiz = DB.businesses.find(b => b.id === C4.bizId);
+    if (selBiz && selBiz.name === '소울스토어') { fetchC4Orders(); return; }
+  }
+  renderC4OrderPanel();
 }
 
 function renderC4CourierDrop() {
@@ -804,6 +863,142 @@ function dlC4TrackingCsv() {
   const filename = '카페24_운송장업로드_' + today() + '.csv';
   dlCsv([['주문번호', '품목별 주문번호', '운송장번호', '수량'], ...rows], filename);
   toast(filename + ' 다운로드!', 'ok');
+}
+
+// ── 카페24 주문 패널 ──
+async function fetchC4Orders() {
+  C4Panel.loading = true; C4Panel.error = null; C4Panel.orders = []; C4Panel.checkedIds = new Set();
+  renderC4OrderPanel();
+  try {
+    const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-orders-list');
+    if (!res.ok) throw new Error('서버 오류: ' + res.status);
+    const json = await res.json();
+    C4Panel.orders = Array.isArray(json.orders) ? json.orders : [];
+    C4Panel.loading = false;
+    renderC4OrderPanel();
+    toast('주문 ' + C4Panel.orders.length + '건 불러옴', 'ok');
+  } catch (e) {
+    C4Panel.loading = false; C4Panel.error = e.message;
+    renderC4OrderPanel();
+    toast('불러오기 실패: ' + e.message, 'err');
+  }
+}
+
+function c4OrderStatus(order) { return C4_STATUS_MAP[order.shipping_status] || null; }
+function c4FilteredOrders() { return C4Panel.orders.filter(o => c4OrderStatus(o) === C4Panel.activeTab); }
+
+function renderC4OrderPanel() {
+  const panel = document.getElementById('c4-order-panel-body');
+  if (!panel) return;
+
+  if (!C4.bizId) {
+    panel.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg><p>사업자를 선택하면<br>주문내역이 표시됩니다</p></div>';
+    return;
+  }
+  const selBiz = DB.businesses.find(b => b.id === C4.bizId);
+  if (!selBiz || selBiz.name !== '소울스토어') {
+    panel.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l2 2"/></svg><p>준비중입니다</p><small>현재 소울스토어만 API 연동이 지원됩니다</small></div>';
+    return;
+  }
+  if (C4Panel.loading) {
+    panel.innerHTML = '<div class="empty-state"><p style="color:var(--tx2)">주문 데이터를 불러오는 중...</p></div>';
+    return;
+  }
+  if (C4Panel.error) {
+    panel.innerHTML = '<div class="empty-state"><p style="color:var(--red);font-size:12px">' + C4Panel.error + '</p><button class="btn btn-sm" style="margin-top:8px" onclick="fetchC4Orders()">다시 시도</button></div>';
+    return;
+  }
+
+  const tabsHtml = C4_STATUS_TABS.map(tab => {
+    const cnt = C4Panel.orders.filter(o => c4OrderStatus(o) === tab).length;
+    return '<button class="order-status-tab' + (tab === C4Panel.activeTab ? ' active' : '') + '" onclick="c4SetTab(\'' + tab + '\')">' +
+      tab + '<span class="o-tab-cnt">' + cnt + '</span></button>';
+  }).join('');
+
+  const filtered = c4FilteredOrders();
+  const allChecked = filtered.length > 0 && filtered.every(o => C4Panel.checkedIds.has(o.order_id));
+
+  const rowsHtml = filtered.length ? filtered.map(order => {
+    const checked = C4Panel.checkedIds.has(order.order_id);
+    const r = (order.receivers && order.receivers[0]) || {};
+    const item = (order.items && order.items[0]) || {};
+    const date = (order.order_date || '').substring(0, 10);
+    const rName = r.name || r.receiver_name || order.billing_name || '-';
+    const pName = item.product_name || '-';
+    const place = order.order_place_name || '';
+    const oid = order.order_id.replace(/'/g, "\\'");
+    return '<div class="order-row' + (checked ? ' chk-sel' : '') + '" onclick="c4RowClick(\'' + oid + '\')">' +
+      '<input type="checkbox" class="o-chk" ' + (checked ? 'checked' : '') + ' onclick="event.stopPropagation()" onchange="c4CheckOrder(\'' + oid + '\',this.checked)">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">' +
+          '<span style="font-size:11px;color:var(--gold);font-family:\'JetBrains Mono\',monospace;flex-shrink:0">' + order.order_id + '</span>' +
+          '<span style="font-size:10px;color:var(--tx3)">' + date + '</span>' +
+          (place ? '<span style="font-size:10px;background:var(--sur3);padding:1px 5px;border-radius:4px;color:var(--tx2)">' + place + '</span>' : '') +
+        '</div>' +
+        '<div style="display:flex;gap:5px;align-items:center;margin-top:2px">' +
+          '<span style="font-size:12px;font-weight:500;flex-shrink:0">' + rName + '</span>' +
+          '<span style="font-size:11px;color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + pName + '</span>' +
+        '</div>' +
+      '</div></div>';
+  }).join('') : '<div class="empty-state" style="padding:20px 20px"><p>해당 상태의 주문이 없습니다</p></div>';
+
+  panel.innerHTML =
+    '<div class="order-status-tabs" style="flex-shrink:0">' + tabsHtml + '</div>' +
+    '<div class="order-list-hdr">' +
+      '<input type="checkbox" class="o-chk" id="c4-sel-all"' + (allChecked ? ' checked' : '') + (filtered.length ? '' : ' disabled') + ' onchange="c4SelectAll(this.checked)">' +
+      '<label for="c4-sel-all" style="cursor:pointer">전체선택</label>' +
+      '<span style="margin-left:auto;font-size:11px;color:var(--tx3)">' + C4Panel.checkedIds.size + '건 선택</span>' +
+    '</div>' +
+    '<div class="order-list-body">' + rowsHtml + '</div>' +
+    '<button class="btn btn-gold btn-full" style="margin-top:12px;flex-shrink:0" onclick="c4ConfirmOrders()">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg>' +
+      ' 발주확인 (' + C4Panel.checkedIds.size + '건)</button>';
+}
+
+function c4SetTab(tab) { C4Panel.activeTab = tab; C4Panel.checkedIds = new Set(); renderC4OrderPanel(); }
+function c4RowClick(oid) { c4CheckOrder(oid, !C4Panel.checkedIds.has(oid)); }
+function c4CheckOrder(oid, checked) {
+  if (checked) C4Panel.checkedIds.add(oid); else C4Panel.checkedIds.delete(oid);
+  renderC4OrderPanel();
+}
+function c4SelectAll(checked) {
+  c4FilteredOrders().forEach(o => checked ? C4Panel.checkedIds.add(o.order_id) : C4Panel.checkedIds.delete(o.order_id));
+  renderC4OrderPanel();
+}
+
+function c4ConfirmOrders() {
+  if (!C4.bizId) return toast('사업자를 선택하세요', 'err');
+  if (!C4.courierId) return toast('STEP A에서 택배사를 먼저 선택하세요', 'err');
+  if (C4Panel.checkedIds.size === 0) return toast('발주확인할 주문을 선택하세요', 'err');
+  const selected = C4Panel.orders.filter(o => C4Panel.checkedIds.has(o.order_id));
+  if (!selected.length) return toast('선택된 주문이 없습니다', 'err');
+
+  // 카페24 플랫폼 매핑의 컬럼명으로 행 구성 → extractStd가 그대로 파싱
+  const headers = ['주문번호', '품목별 주문번호', '수령인', '수령인 휴대전화', '수령인 우편번호', '수령인 주소', '수령인 상세 주소', '주문상품명', '주문상품명(옵션포함)', '수량', '배송메시지'];
+  const rows = selected.map(order => {
+    const r = (order.receivers && order.receivers[0]) || {};
+    const item = (order.items && order.items[0]) || {};
+    return [
+      order.order_id || '',
+      order.item_order_no || order.order_id || '',
+      r.name || r.receiver_name || order.billing_name || '',
+      r.phone || r.cellphone || r.receiver_phone || r.receiver_mobile || '',
+      r.zipcode || r.receiver_zipcode || '',
+      r.address1 || r.address || r.receiver_address || '',
+      r.address2 || r.address_detail || r.receiver_address_detail || '',
+      item.product_name || '',
+      item.option_value || item.product_option || item.option_name || item.product_name || '',
+      String(item.quantity || 1),
+      order.delivery_memo || order.memo || order.message || order.delivery_message || ''
+    ];
+  });
+
+  C4.orderHeaders = headers;
+  C4.orderData = rows;
+  C4.orderName = 'API_소울스토어_' + selected.length + '건';
+  document.getElementById('c4-order-result').innerHTML =
+    '<div class="file-done-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>API에서 ' + selected.length + '건 불러옴</div>';
+  convertC4Work();
 }
 
 // ── 정규화 함수 ──
