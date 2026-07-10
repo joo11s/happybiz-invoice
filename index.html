@@ -753,7 +753,7 @@ function runPoolMatch(headers, data) {
       return;
     }
     const e = remain[matchIdx];
-    outRows.push([e.order_no, e.item_order_no, String(trackNo).replace(/[^0-9]/g, ''), '']);
+    outRows.push([e.order_no, e.item_order_no, String(trackNo).replace(/[^0-9-]/g, ''), '']);
   });
 
   // 사용된 항목 제거 후 풀 갱신
