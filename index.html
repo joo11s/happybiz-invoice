@@ -826,6 +826,10 @@ function runPoolMatch(headers, data) {
   savePool(C4.bizId, newPool);
   updatePoolCounter();
   renderMatchResult(outRows, failedRows);
+  // 카페24 운송장 자동 등록 (webhook) — CSV 다운로드와 무관하게 비동기 실행
+  if (outRows.length) {
+    callShipmentRegisterWebhook(outRows, C4.courierId).catch(() => {});
+  }
 }
 
 function renderMatchResult(matched, failed) {
@@ -850,11 +854,105 @@ function renderMatchResult(matched, failed) {
     <div class="match-result-box">
       <div class="match-result-title">매칭 ${matched.length}건 / 실패 ${failed.length}건</div>
       ${failHtml}
+      <div id="c4-webhook-status"></div>
     </div>
     ${dlBtn}`;
 
   if (matched.length) toast(`매칭 완료: ${matched.length}건 성공${failed.length ? ', ' + failed.length + '건 실패' : ''}`, 'ok');
   else toast('매칭된 주문이 없습니다', 'err');
+}
+
+// 사업자 bizId → webhook용 코드 매핑
+function getBizWebhookCode(bizId) {
+  const biz = DB.businesses.find(b => b.id === bizId);
+  if (!biz) return 'soul';
+  const name = biz.name;
+  if (name.includes('소울')) return 'soul';
+  if (name.includes('제이원')) return 'j1';
+  if (name.includes('행복')) return 'happy';
+  return 'soul';
+}
+
+// 택배사 courierId → 카페24 배송사 코드 매핑
+const COURIER_CODE_MAP = { 'courier-cj': '0006', 'courier-hanjin': '0018', 'courier-lotte': '0079' };
+function getCourierWebhookCode(courierId) {
+  if (!courierId) return '0006';
+  if (COURIER_CODE_MAP[courierId]) return COURIER_CODE_MAP[courierId];
+  const courier = DB.couriers.find(c => c.id === courierId);
+  if (!courier) return '0006';
+  const name = courier.name;
+  if (name.includes('CJ') || name.includes('대한통운')) return '0006';
+  if (name.includes('한진')) return '0018';
+  if (name.includes('롯데')) return '0079';
+  return '0006';
+}
+
+async function callShipmentRegisterWebhook(matchedRows, courierId) {
+  const webhookStatusEl = document.getElementById('c4-webhook-status');
+  if (!matchedRows || !matchedRows.length) return;
+
+  if (webhookStatusEl) webhookStatusEl.innerHTML = '<div style="margin-top:8px;font-size:12px;color:var(--tx2)">카페24 반영 중...</div>';
+
+  const bizCode = getBizWebhookCode(C4.bizId);
+  const courierCode = getCourierWebhookCode(courierId);
+
+  const requests = matchedRows.map(row => ({
+    order_id: row[0],
+    order_item_code: [row[1]],
+    tracking_no: String(row[2]).replace(/[^0-9]/g, ''),
+    shipping_company_code: courierCode,
+    status: 'shipping'
+  }));
+
+  try {
+    const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-shipment-register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bizId: bizCode, requests })
+    });
+
+    let successCount = 0, failCount = 0, failMessages = [];
+    let json = {};
+    try { json = await res.json(); } catch (_) {}
+
+    if (!res.ok) {
+      failCount = requests.length;
+      failMessages.push(json.message || json.error || `HTTP ${res.status}`);
+    } else if (Array.isArray(json)) {
+      json.forEach((item, idx) => {
+        if (item.success === false || item.error) {
+          failCount++;
+          failMessages.push(`${requests[idx]?.order_id}: ${item.message || item.error || '실패'}`);
+        } else {
+          successCount++;
+        }
+      });
+    } else if (json.success === false || json.error) {
+      failCount = requests.length;
+      failMessages.push(json.message || json.error || '실패');
+    } else {
+      successCount = requests.length;
+    }
+
+    if (webhookStatusEl) {
+      const color = failCount > 0 ? 'var(--red)' : 'var(--green)';
+      const border = failCount > 0 ? 'var(--rb)' : 'var(--gb)';
+      const bg = failCount > 0 ? 'var(--rl)' : 'var(--gl)';
+      let html = `<div style="margin-top:8px;padding:8px 10px;background:${bg};border-radius:var(--rs);border:1px solid ${border}">`;
+      html += `<div style="font-size:12px;font-weight:600;color:${color}">카페24 반영: 성공 ${successCount}건 / 실패 ${failCount}건</div>`;
+      if (failMessages.length) {
+        const shown = failMessages.slice(0, 5);
+        html += `<div style="margin-top:4px;font-size:11px;color:var(--tx2)">${shown.join('<br>')}</div>`;
+        if (failMessages.length > 5) html += `<div style="font-size:11px;color:var(--tx3)">... 외 ${failMessages.length - 5}건</div>`;
+      }
+      html += '</div>';
+      webhookStatusEl.innerHTML = html;
+    }
+  } catch (e) {
+    if (webhookStatusEl) {
+      webhookStatusEl.innerHTML = `<div style="margin-top:8px;padding:8px 10px;background:var(--rl);border-radius:var(--rs);border:1px solid var(--rb);font-size:12px;color:var(--red)">카페24 반영 오류: ${e.message}</div>`;
+    }
+  }
 }
 
 function toggleFailList(el) {
