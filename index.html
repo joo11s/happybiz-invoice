@@ -1164,8 +1164,9 @@ function c4PrepareOrderData() {
     const r = (order.receivers && order.receivers[0]) || {};
     const item = (order.items && order.items[0]) || {};
     // 토스쇼핑은 orderProductId가 품목별 주문번호 역할을 함
+    // n8n 정규화 후 orderProductId는 items[0].orderProductId 또는 items[0].order_item_code에 위치
     const itemOrderNo = currentPlatform === 'toss'
-      ? (order.orderProductId || order.item_order_no || order.order_id || '')
+      ? (item.orderProductId || item.order_item_code || order.orderProductId || order.item_order_no || order.order_id || '')
       : (order.item_order_no || order.order_id || '');
     return [
       order.order_id || '',
@@ -1176,9 +1177,9 @@ function c4PrepareOrderData() {
       r.address1 || r.address || r.receiver_address || '',
       r.address2 || r.address_detail || r.receiver_address_detail || '',
       item.product_name || '',
-      item.option_value || item.product_option || item.option_name || item.product_name || '',
+      item.option_value || item.product_option || item.option_name || item.option_detail || item.product_name || '',
       String(item.quantity || 1),
-      order.delivery_memo || order.memo || order.message || order.delivery_message || ''
+      r.memo || order.delivery_memo || order.memo || order.message || order.delivery_message || ''
     ];
   });
 
