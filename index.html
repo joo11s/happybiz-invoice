@@ -427,13 +427,13 @@ const PLATFORM_TABS = [
     const btn = document.createElement('button');
     btn.className = 'tab' + (!pt.ready ? ' tab-dim' : '') + (i===0 ? ' active' : '');
     btn.textContent = pt.name;
-    btn.onclick = () => switchPlatformTab(pt.id, btn);
+    btn.setAttribute('onclick', "switchPlatformTab('" + pt.id + "', this)");
     bar.appendChild(btn);
   });
   const settingsBtn = document.createElement('button');
   settingsBtn.className = 'tab';
   settingsBtn.textContent = '설정';
-  settingsBtn.onclick = () => switchPlatformTab('settings', settingsBtn);
+  settingsBtn.setAttribute('onclick', "switchPlatformTab('settings', this)");
   bar.appendChild(settingsBtn);
 })();
 
@@ -441,7 +441,7 @@ function switchPlatformTab(id, el) {
   const pt = PLATFORM_TABS.find(t => t.id === id);
   if (pt && !pt.ready) { toast('준비중입니다', ''); return; }
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  el.classList.add('active');
+  if (el) el.classList.add('active');
   document.querySelectorAll('.tab-content').forEach(c => { c.style.display = 'none'; c.classList.remove('active'); });
   if (id === 'settings') {
     const tc = document.getElementById('tab-settings');
