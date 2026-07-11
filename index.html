@@ -974,7 +974,8 @@ async function fetchC4Orders() {
   C4Panel.loading = true; C4Panel.error = null; C4Panel.orders = []; C4Panel.checkedIds = new Set();
   renderC4OrderPanel();
   try {
-    const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-orders-list');
+    const bizCode = { '소울스토어':'soul', '제이원투몰':'j1', '행복산업':'happy' }[DB.businesses.find(b => b.id === C4.bizId)?.name] || 'soul';
+    const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-orders-list?biz=' + bizCode);
     if (!res.ok) throw new Error('서버 오류: ' + res.status);
     const json = await res.json();
     C4Panel.orders = Array.isArray(json.orders) ? json.orders : [];
@@ -1000,10 +1001,7 @@ function renderC4OrderPanel() {
     return;
   }
   const selBiz = DB.businesses.find(b => b.id === C4.bizId);
-  if (!selBiz || selBiz.name !== '소울스토어') {
-    panel.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l2 2"/></svg><p>준비중입니다</p><small>현재 소울스토어만 API 연동이 지원됩니다</small></div>';
-    return;
-  }
+  if (!selBiz) return;
   if (C4Panel.loading) {
     panel.innerHTML = '<div class="empty-state"><p style="color:var(--tx2)">주문 데이터를 불러오는 중...</p></div>';
     return;
