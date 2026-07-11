@@ -452,6 +452,8 @@ function switchPlatformTab(id, el) {
     currentPlatform = id;
     C4Panel.orders = []; C4Panel.checkedIds = new Set(); C4Panel.error = null; C4Panel.loading = false;
     C4Panel.activeTab = id === 'toss' ? '결제완료' : '마켓발주전';
+    // 토스 전용 사업자가 아닌 경우 선택 초기화 (예: 태실장픽앤샵 → 토스쇼핑 전환 시)
+    if (id === 'toss' && C4.bizId && !TOSS_BIZ_IDS.includes(C4.bizId)) C4.bizId = null;
     C4.orderHeaders = null; C4.orderData = null; C4.orderName = null;
     const tc = document.getElementById('tab-cafe24');
     if (tc) { tc.style.display = 'flex'; tc.classList.add('active'); }
@@ -634,10 +636,16 @@ function updateC4Labels() {
   if (stepB) stepB.textContent = isToss ? '접수결과 → 토스쇼핑 운송장 등록 (자동매칭)' : '접수결과 → 카페24 운송장 CSV (자동매칭)';
 }
 
+// 토스쇼핑 전용 사업자 ID 목록 (토스 계정이 있는 사업자만)
+const TOSS_BIZ_IDS = ['b1', 'b2', 'b3']; // 소울스토어, 제이원투몰, 행복산업
+
 function renderCafe24() {
   const sel = document.getElementById('c4-biz-sel');
+  const bizList = currentPlatform === 'toss'
+    ? DB.businesses.filter(b => TOSS_BIZ_IDS.includes(b.id))
+    : DB.businesses;
   sel.innerHTML = '<option value="">사업자 선택...</option>' +
-    DB.businesses.map(b => `<option value="${b.id}" ${b.id === C4.bizId ? 'selected' : ''}>${b.name}</option>`).join('');
+    bizList.map(b => `<option value="${b.id}" ${b.id === C4.bizId ? 'selected' : ''}>${b.name}</option>`).join('');
   renderC4CourierDrop();
   updatePoolCounter();
   updateC4Labels();
