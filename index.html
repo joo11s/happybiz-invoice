@@ -396,6 +396,16 @@ const C4_STATUS_MAP = {
 };
 const C4_STATUS_TABS = ['입금전', '마켓발주전', '배송준비중', '배송대기', '배송중', '배송완료'];
 
+// ── 토스쇼핑 주문상태 매핑 ──
+const TOSS_STATUS_MAP = {
+  PAID: '결제완료',
+  PREPARING_PRODUCT: '상품준비중',
+  DELIVERING: '배송중',
+  DELIVERED: '배송완료',
+  CONFIRMED_ORDER: '구매확정'
+};
+const TOSS_STATUS_TABS = ['결제완료', '상품준비중', '배송중', '배송완료', '구매확정'];
+
 // 카페24 주문 패널 상태
 let C4Panel = { orders: [], loading: false, error: null, activeTab: '마켓발주전', checkedIds: new Set() };
 
@@ -441,6 +451,7 @@ function switchPlatformTab(id, el) {
     // 토스쇼핑은 카페24 패널을 공용으로 재사용하며 플랫폼만 전환
     currentPlatform = id;
     C4Panel.orders = []; C4Panel.checkedIds = new Set(); C4Panel.error = null; C4Panel.loading = false;
+    C4Panel.activeTab = id === 'toss' ? '결제완료' : '마켓발주전';
     C4.orderHeaders = null; C4.orderData = null; C4.orderName = null;
     const tc = document.getElementById('tab-cafe24');
     if (tc) { tc.style.display = 'flex'; tc.classList.add('active'); }
@@ -1043,7 +1054,10 @@ async function fetchC4Orders() {
   }
 }
 
-function c4OrderStatus(order) { return C4_STATUS_MAP[order.shipping_status] || null; }
+function c4OrderStatus(order) {
+  if (currentPlatform === 'toss') return TOSS_STATUS_MAP[order.orderStatus || order.order_status] || null;
+  return C4_STATUS_MAP[order.shipping_status] || null;
+}
 function c4FilteredOrders() { return C4Panel.orders.filter(o => c4OrderStatus(o) === C4Panel.activeTab); }
 
 function renderC4OrderPanel() {
@@ -1065,7 +1079,8 @@ function renderC4OrderPanel() {
     return;
   }
 
-  const tabsHtml = C4_STATUS_TABS.map(tab => {
+  const statusTabs = currentPlatform === 'toss' ? TOSS_STATUS_TABS : C4_STATUS_TABS;
+  const tabsHtml = statusTabs.map(tab => {
     const cnt = C4Panel.orders.filter(o => c4OrderStatus(o) === tab).length;
     return '<button class="order-status-tab' + (tab === C4Panel.activeTab ? ' active' : '') + '" onclick="c4SetTab(\'' + tab + '\')">' +
       tab + '<span class="o-tab-cnt">' + cnt + '</span></button>';
@@ -1163,8 +1178,46 @@ function c4PrepareOrderData() {
 }
 
 async function c4DoConfirm() {
+  if (currentPlatform === 'toss') { await tossDoConfirm(); return; }
   /* TODO: 카페24 발주확인 API 연동 예정, 지금은 자리만 */
   toast('발주확인 API 연동 예정', 'info');
+}
+
+async function tossDoConfirm() {
+  if (!C4Panel.checkedIds.size) return toast('주문을 선택하세요', 'err');
+
+  // PAID 상태 주문만 발주확인 가능
+  const selected = C4Panel.orders.filter(o => C4Panel.checkedIds.has(o.order_id));
+  const nonPaid = selected.filter(o => (o.orderStatus || o.order_status) !== 'PAID');
+  if (nonPaid.length) return toast('결제완료(PAID) 상태 주문만 발주확인할 수 있습니다', 'err');
+
+  // orderProductId 수집: items[].order_item_code 또는 items[].orderProductId에서 추출
+  const orderProductIds = selected.flatMap(o => {
+    if (Array.isArray(o.items)) return o.items.map(i => i.order_item_code || i.orderProductId || i.order_product_id).filter(Boolean);
+    if (o.orderProductId) return [o.orderProductId];
+    if (o.order_item_code) return [o.order_item_code];
+    return [];
+  });
+  if (!orderProductIds.length) return toast('발주확인할 주문상품 ID가 없습니다. n8n 응답에 orderProductId가 필요합니다', 'err');
+
+  const bizCode = getBizWebhookCode(C4.bizId);
+  try {
+    const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-toss-status-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bizId: bizCode, orderProductIds, status: 'PREPARING_PRODUCT' })
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json.success === false || json.error) {
+      toast('발주확인 실패: ' + (json.message || json.error || `HTTP ${res.status}`), 'err');
+    } else {
+      toast(`발주확인 완료 (${orderProductIds.length}건) — 상품준비중 전환`, 'ok');
+      C4Panel.checkedIds = new Set();
+      await fetchC4Orders();
+    }
+  } catch (e) {
+    toast('발주확인 오류: ' + e.message, 'err');
+  }
 }
 
 // ── 정규화 함수 ──
