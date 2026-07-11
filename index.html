@@ -198,7 +198,7 @@ select.modal-sel option{background:var(--sur2);}
 
       <!-- 주문 패널 -->
       <div class="step-block c4-order-block">
-        <div class="step-label">카페24 연동</div>
+        <div class="step-label" id="c4-platform-label">카페24 연동</div>
         <div class="step-title" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--bdr)">
           주문내역
           <button class="btn btn-sm btn-ghost" onclick="fetchC4Orders()" style="font-size:11px">↻ 새로고침</button>
@@ -230,7 +230,7 @@ select.modal-sel option{background:var(--sur2);}
         </div>
 
         <div class="field-group">
-          <div class="field-label">카페24 주문내역 파일</div>
+          <div class="field-label" id="c4-order-file-label">카페24 주문내역 파일</div>
           <div class="upload-zone" id="c4-order-drop"
             onclick="document.getElementById('c4-order-file').click()"
             ondragover="event.preventDefault();this.classList.add('drag')"
@@ -254,7 +254,7 @@ select.modal-sel option{background:var(--sur2);}
       <!-- STEP B -->
       <div class="step-block">
         <div class="step-label">STEP B</div>
-        <div class="step-title">접수결과 → 카페24 운송장 CSV (자동매칭)</div>
+        <div class="step-title" id="c4-stepb-title">접수결과 → 카페24 운송장 CSV (자동매칭)</div>
 
         <div class="field-group">
           <div class="field-label">송장번호 나온 엑셀 업로드</div>
@@ -399,9 +399,12 @@ const C4_STATUS_TABS = ['입금전', '마켓발주전', '배송준비중', '배�
 // 카페24 주문 패널 상태
 let C4Panel = { orders: [], loading: false, error: null, activeTab: '마켓발주전', checkedIds: new Set() };
 
+// 현재 선택된 플랫폼 (주문 패널 공용)
+let currentPlatform = 'cafe24'; // 'cafe24' | 'toss'
+
 const PLATFORM_TABS = [
   {id:'cafe24', name:'카페24', ready:true},
-  {id:'toss', name:'토스쇼핑', ready:false},
+  {id:'toss', name:'토스쇼핑', ready:true},
   {id:'domeggook', name:'도매꾹', ready:false},
   {id:'onch', name:'온채널', ready:false},
   {id:'epost', name:'우체국쇼핑', ready:false}
@@ -434,10 +437,17 @@ function switchPlatformTab(id, el) {
     const tc = document.getElementById('tab-settings');
     tc.style.display = 'flex'; tc.classList.add('active');
     renderSettings();
+  } else if (id === 'cafe24' || id === 'toss') {
+    // 토스쇼핑은 카페24 패널을 공용으로 재사용하며 플랫폼만 전환
+    currentPlatform = id;
+    C4Panel.orders = []; C4Panel.checkedIds = new Set(); C4Panel.error = null; C4Panel.loading = false;
+    C4.orderHeaders = null; C4.orderData = null; C4.orderName = null;
+    const tc = document.getElementById('tab-cafe24');
+    if (tc) { tc.style.display = 'flex'; tc.classList.add('active'); }
+    renderCafe24();
   } else {
     const tc = document.getElementById('tab-' + id);
     if (tc) { tc.style.display = 'flex'; tc.classList.add('active'); }
-    if (id === 'cafe24') renderCafe24();
   }
 }
 
@@ -603,12 +613,23 @@ function savePool(bizId, pool) { localStorage.setItem(poolKey(bizId), JSON.strin
 // ── 카페24 탭 상태 ──
 let C4 = { bizId: null, courierId: null, orderHeaders: null, orderData: null, orderName: null };
 
+function updateC4Labels() {
+  const isToss = currentPlatform === 'toss';
+  const el = document.getElementById('c4-platform-label');
+  if (el) el.textContent = isToss ? '토스쇼핑 연동' : '카페24 연동';
+  const fileLbl = document.getElementById('c4-order-file-label');
+  if (fileLbl) fileLbl.textContent = isToss ? '토스쇼핑 주문내역 파일' : '카페24 주문내역 파일';
+  const stepB = document.getElementById('c4-stepb-title');
+  if (stepB) stepB.textContent = isToss ? '접수결과 → 토스쇼핑 운송장 등록 (자동매칭)' : '접수결과 → 카페24 운송장 CSV (자동매칭)';
+}
+
 function renderCafe24() {
   const sel = document.getElementById('c4-biz-sel');
   sel.innerHTML = '<option value="">사업자 선택...</option>' +
     DB.businesses.map(b => `<option value="${b.id}" ${b.id === C4.bizId ? 'selected' : ''}>${b.name}</option>`).join('');
   renderC4CourierDrop();
   updatePoolCounter();
+  updateC4Labels();
   renderC4OrderPanel();
 }
 
@@ -626,6 +647,7 @@ function onC4BizChange() {
   updatePoolCounter();
   C4Panel.orders = []; C4Panel.checkedIds = new Set(); C4Panel.error = null; C4Panel.loading = false;
   if (C4.bizId) {
+    if (currentPlatform === 'toss') { fetchC4Orders(); return; }
     const selBiz = DB.businesses.find(b => b.id === C4.bizId);
     if (selBiz && selBiz.name === '소울스토어') { fetchC4Orders(); return; }
   }
@@ -698,7 +720,7 @@ function convertC4Work() {
   const ci = {}; activeHeaders.forEach((h, i) => ci[h] = i);
   const allRows = activeData.map(row => {
     const std = extractStd(row, ci, cafe24Pf.mapping);
-    std.platform = '카페24';
+    std.platform = currentPlatform === 'toss' ? '토스쇼핑' : '카페24';
     return std;
   });
   if (!allRows.length) return toast('변환할 데이터가 없습니다', 'err');
@@ -844,10 +866,13 @@ function renderMatchResult(matched, failed) {
       </div>
     </div>` : '';
 
+  const csvBtnLabel = currentPlatform === 'toss'
+    ? `운송장 CSV 다운로드 (${matched.length}건)`
+    : `카페24 운송장 업로드 CSV 다운로드 (${matched.length}건)`;
   const dlBtn = matched.length ? `
     <button class="btn btn-gold btn-full" style="margin-top:14px" onclick="dlC4TrackingCsv()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
-      카페24 운송장 업로드 CSV 다운로드 (${matched.length}건)
+      ${csvBtnLabel}
     </button>` : '';
 
   el.innerHTML = `
@@ -891,47 +916,64 @@ async function callShipmentRegisterWebhook(matchedRows, courierId) {
   const webhookStatusEl = document.getElementById('c4-webhook-status');
   if (!matchedRows || !matchedRows.length) return;
 
-  if (webhookStatusEl) webhookStatusEl.innerHTML = '<div style="margin-top:8px;font-size:12px;color:var(--tx2)">카페24 반영 중...</div>';
+  const platformLabel = currentPlatform === 'toss' ? '토스쇼핑' : '카페24';
+  if (webhookStatusEl) webhookStatusEl.innerHTML = `<div style="margin-top:8px;font-size:12px;color:var(--tx2)">${platformLabel} 반영 중...</div>`;
 
   const bizCode = getBizWebhookCode(C4.bizId);
   const courierCode = getCourierWebhookCode(courierId);
-
-  const requests = matchedRows.map(row => ({
-    order_id: row[0],
-    order_item_code: [row[1]],
-    tracking_no: String(row[2]).replace(/[^0-9]/g, ''),
-    shipping_company_code: courierCode,
-    status: 'shipping'
-  }));
+  const totalCount = matchedRows.length;
 
   try {
-    const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-shipment-register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bizId: bizCode, requests })
-    });
+    let res;
+    if (currentPlatform === 'toss') {
+      // 토스쇼핑: orderProductId 기반 등록 (row[1]에 orderProductId 저장됨)
+      const items = matchedRows.map(row => ({
+        orderProductId: row[1],
+        courierCode: courierCode,
+        trackingNumber: String(row[2]).replace(/[^0-9]/g, '')
+      }));
+      res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-toss-shipment-register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bizId: bizCode, items })
+      });
+    } else {
+      // 카페24: 기존 방식
+      const requests = matchedRows.map(row => ({
+        order_id: row[0],
+        order_item_code: [row[1]],
+        tracking_no: String(row[2]).replace(/[^0-9]/g, ''),
+        shipping_company_code: courierCode,
+        status: 'shipping'
+      }));
+      res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-shipment-register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bizId: bizCode, requests })
+      });
+    }
 
     let successCount = 0, failCount = 0, failMessages = [];
     let json = {};
     try { json = await res.json(); } catch (_) {}
 
     if (!res.ok) {
-      failCount = requests.length;
+      failCount = totalCount;
       failMessages.push(json.message || json.error || `HTTP ${res.status}`);
     } else if (Array.isArray(json)) {
       json.forEach((item, idx) => {
         if (item.success === false || item.error) {
           failCount++;
-          failMessages.push(`${requests[idx]?.order_id}: ${item.message || item.error || '실패'}`);
+          failMessages.push(`${matchedRows[idx]?.[0]}: ${item.message || item.error || '실패'}`);
         } else {
           successCount++;
         }
       });
     } else if (json.success === false || json.error) {
-      failCount = requests.length;
+      failCount = totalCount;
       failMessages.push(json.message || json.error || '실패');
     } else {
-      successCount = requests.length;
+      successCount = totalCount;
     }
 
     if (webhookStatusEl) {
@@ -939,7 +981,7 @@ async function callShipmentRegisterWebhook(matchedRows, courierId) {
       const border = failCount > 0 ? 'var(--rb)' : 'var(--gb)';
       const bg = failCount > 0 ? 'var(--rl)' : 'var(--gl)';
       let html = `<div style="margin-top:8px;padding:8px 10px;background:${bg};border-radius:var(--rs);border:1px solid ${border}">`;
-      html += `<div style="font-size:12px;font-weight:600;color:${color}">카페24 반영: 성공 ${successCount}건 / 실패 ${failCount}건</div>`;
+      html += `<div style="font-size:12px;font-weight:600;color:${color}">${platformLabel} 반영: 성공 ${successCount}건 / 실패 ${failCount}건</div>`;
       if (failMessages.length) {
         const shown = failMessages.slice(0, 5);
         html += `<div style="margin-top:4px;font-size:11px;color:var(--tx2)">${shown.join('<br>')}</div>`;
@@ -950,7 +992,7 @@ async function callShipmentRegisterWebhook(matchedRows, courierId) {
     }
   } catch (e) {
     if (webhookStatusEl) {
-      webhookStatusEl.innerHTML = `<div style="margin-top:8px;padding:8px 10px;background:var(--rl);border-radius:var(--rs);border:1px solid var(--rb);font-size:12px;color:var(--red)">카페24 반영 오류: ${e.message}</div>`;
+      webhookStatusEl.innerHTML = `<div style="margin-top:8px;padding:8px 10px;background:var(--rl);border-radius:var(--rs);border:1px solid var(--rb);font-size:12px;color:var(--red)">${platformLabel} 반영 오류: ${e.message}</div>`;
     }
   }
 }
@@ -969,15 +1011,27 @@ function dlC4TrackingCsv() {
   toast(filename + ' 다운로드!', 'ok');
 }
 
-// ── 카페24 주문 패널 ──
+// ── 주문 패널 (카페24 / 토스쇼핑 공용) ──
 async function fetchC4Orders() {
   C4Panel.loading = true; C4Panel.error = null; C4Panel.orders = []; C4Panel.checkedIds = new Set();
   renderC4OrderPanel();
   try {
-    const bizCode = { '소울스토어':'soul', '제이원투몰':'j1', '행복산업':'happy' }[DB.businesses.find(b => b.id === C4.bizId)?.name] || 'soul';
-    const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-orders-list?biz=' + bizCode);
-    if (!res.ok) throw new Error('서버 오류: ' + res.status);
-    const json = await res.json();
+    const bizCode = getBizWebhookCode(C4.bizId);
+    let json;
+    if (currentPlatform === 'toss') {
+      const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-toss-orders-list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bizId: bizCode })
+      });
+      if (!res.ok) throw new Error('서버 오류: ' + res.status);
+      json = await res.json();
+    } else {
+      const c4BizCode = { '소울스토어':'soul', '제이원투몰':'j1', '행복산업':'happy' }[DB.businesses.find(b => b.id === C4.bizId)?.name] || 'soul';
+      const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-orders-list?biz=' + c4BizCode);
+      if (!res.ok) throw new Error('서버 오류: ' + res.status);
+      json = await res.json();
+    }
     C4Panel.orders = Array.isArray(json.orders) ? json.orders : [];
     C4Panel.loading = false;
     renderC4OrderPanel();
@@ -1084,9 +1138,13 @@ function c4PrepareOrderData() {
   const rows = selected.map(order => {
     const r = (order.receivers && order.receivers[0]) || {};
     const item = (order.items && order.items[0]) || {};
+    // 토스쇼핑은 orderProductId가 품목별 주문번호 역할을 함
+    const itemOrderNo = currentPlatform === 'toss'
+      ? (order.orderProductId || order.item_order_no || order.order_id || '')
+      : (order.item_order_no || order.order_id || '');
     return [
       order.order_id || '',
-      order.item_order_no || order.order_id || '',
+      itemOrderNo,
       r.name || r.receiver_name || order.billing_name || '',
       r.phone || r.cellphone || r.receiver_phone || r.receiver_mobile || '',
       r.zipcode || r.receiver_zipcode || '',
