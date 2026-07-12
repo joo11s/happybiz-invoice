@@ -1105,7 +1105,9 @@ function renderC4OrderPanel() {
     const item = (order.items && order.items[0]) || {};
     const date = (order.order_date || '').substring(0, 10);
     const rName = r.name || r.receiver_name || order.billing_name || '-';
-    const pName = item.product_name || '-';
+    const qty = item.quantity || '';
+    const extraCnt = (order.items && order.items.length > 1) ? order.items.length - 1 : 0;
+    const pName = (item.product_name || '-') + (qty ? ' x' + qty + '개' : '') + (extraCnt > 0 ? ' (외 ' + extraCnt + '건)' : '');
     const place = order.order_place_name || '';
     const oid = order.order_id.replace(/'/g, "\\'");
     return '<div class="order-row' + (checked ? ' chk-sel' : '') + '" onclick="c4RowClick(\'' + oid + '\')">' +
