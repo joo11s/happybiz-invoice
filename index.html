@@ -962,7 +962,6 @@ async function callShipmentRegisterWebhook(matchedRows, courierId) {
       // 카페24: 기존 방식
       const requests = matchedRows.map(row => ({
         order_id: row[0],
-        order_item_code: [row[1]],
         tracking_no: String(row[2]).replace(/[^0-9]/g, ''),
         shipping_company_code: courierCode,
         status: 'shipping'
