@@ -1065,6 +1065,10 @@ async function fetchC4Orders() {
 
 function c4OrderStatus(order) {
   if (currentPlatform === 'toss') return TOSS_STATUS_MAP[order.orderStatus || order.order_status] || null;
+  // 카페24: shipping_status=F일 때 운송장번호 유무로 배송대기/배송준비중 구분
+  if (order.shipping_status === 'F') {
+    return order.tracking_no ? '배송대기' : '배송준비중';
+  }
   return C4_STATUS_MAP[order.shipping_status] || null;
 }
 function c4FilteredOrders() { return C4Panel.orders.filter(o => c4OrderStatus(o) === C4Panel.activeTab); }
@@ -1121,6 +1125,7 @@ function renderC4OrderPanel() {
           '<span style="font-size:12px;font-weight:500;flex-shrink:0">' + rName + '</span>' +
           '<span style="font-size:11px;color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + pName + '</span>' +
         '</div>' +
+        (order.tracking_no ? '<div style="margin-top:3px"><span style="font-size:10px;background:var(--gl);color:var(--green);border:1px solid var(--green);border-radius:4px;padding:1px 6px;font-family:\'JetBrains Mono\',monospace">' + (order.courier_name ? order.courier_name + ' · ' : '') + order.tracking_no + '</span></div>' : '') +
       '</div></div>';
   }).join('') : '<div class="empty-state" style="padding:20px 20px"><p>해당 상태의 주문이 없습니다</p></div>';
 
