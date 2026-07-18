@@ -307,6 +307,88 @@ select.modal-sel option{background:var(--sur2);}
   </div>
 </div>
 
+<!-- 도매꾹(공급) 탭: 우리가 도매꾹/도매매에 공급자로 등록해 판매하는 경우 -->
+<div id="tab-dome-supply" class="tab-content" style="display:none">
+  <div class="c4-two-col">
+
+    <!-- ▌왼쪽: 사업자 선택 + 주문내역 -->
+    <div class="c4-left-panel">
+      <div class="biz-bar" style="flex-shrink:0;margin-bottom:0">
+        <select class="biz-select" id="dsup-biz-sel" onchange="onDomeSupplyBizChange()">
+          <option value="">사업자 선택... (미정 - 연동 대기)</option>
+        </select>
+      </div>
+
+      <div class="step-block">
+        <div class="step-title" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--bdr)">
+          주문내역 (결제완료 상태)
+          <button class="btn btn-sm btn-ghost" onclick="fetchDomeSupplyOrders()" style="font-size:11px">↻ 새로고침</button>
+        </div>
+        <div id="dsup-order-panel-body">
+          <div style="padding:24px;text-align:center;color:var(--tx3);font-size:13px">
+            사업자 계정(도매매 로그인) 연동 전이라 임시 화면입니다.<br>
+            n8n 워크플로우 "SoulKit 도매꾹(공급) 주문관리" 준비 완료 — 사업자·계정 확정 후 연결됩니다.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ▌오른쪽: 발주확인 / 송장입력 -->
+    <div class="c4-right-panel">
+
+      <div class="step-block">
+        <div class="step-label">STEP A</div>
+        <div class="step-title">주문서 발주확인</div>
+        <div class="field-group">
+          <div class="field-label">체크한 주문 일괄 발주확인</div>
+          <button class="btn btn-gold btn-full" onclick="confirmDomeSupplyOrders()">발주확인 처리</button>
+        </div>
+        <div id="dsup-confirm-result"></div>
+      </div>
+
+      <div class="step-block">
+        <div class="step-label">STEP B</div>
+        <div class="step-title">송장번호 입력</div>
+
+        <div class="field-group">
+          <div class="field-label">주문번호</div>
+          <input type="text" id="dsup-inv-orderno" placeholder="예: 1234567">
+        </div>
+        <div class="field-group">
+          <div class="field-label">택배사</div>
+          <select class="biz-select" id="dsup-inv-courier" style="flex:unset;width:100%">
+            <option value="DAEHAN">CJ대한통운</option>
+            <option value="HANJIN">한진택배</option>
+            <option value="HYUNDAI">롯데택배</option>
+            <option value="KGBL">로젠택배</option>
+            <option value="EPOST">우체국택배</option>
+            <option value="CVSNET">GS편의점택배</option>
+            <option value="CU">CU편의점택배</option>
+            <option value="DAESIN">대신택배</option>
+            <option value="ILYANG">일양택배</option>
+            <option value="CHUNIL">천일택배</option>
+            <option value="KUNYOUNG">건영택배</option>
+            <option value="KYUNGDONG">경동택배</option>
+            <option value="HANSEO">우리택배</option>
+            <option value="HDEXP">합동택배</option>
+            <option value="HPL">한의사랑택배</option>
+            <option value="HOMEPICK">홈픽택배</option>
+            <option value="YONGMA">용마로지스</option>
+            <option value="NEXTMILE">컬리넥스트마일</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <div class="field-label">운송장번호</div>
+          <input type="text" id="dsup-inv-code" placeholder="송장번호 입력">
+        </div>
+        <button class="btn btn-gold btn-full" onclick="submitDomeSupplyInvoice()">송장 등록</button>
+        <div id="dsup-invoice-result"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 <!-- 모달: 사업자 추가 -->
 <div class="modal-ov" id="m-add-biz">
   <div class="modal">
@@ -415,7 +497,8 @@ let currentPlatform = 'cafe24'; // 'cafe24' | 'toss'
 const PLATFORM_TABS = [
   {id:'cafe24', name:'카페24', ready:true},
   {id:'toss', name:'토스쇼핑', ready:true},
-  {id:'domeggook', name:'도매꾹', ready:false},
+  {id:'dome-consign', name:'도매꾹(위탁)', ready:false},
+  {id:'dome-supply', name:'도매꾹(공급)', ready:true},
   {id:'onch', name:'온채널', ready:false},
   {id:'epost', name:'우체국쇼핑', ready:false}
 ];
@@ -458,6 +541,10 @@ function switchPlatformTab(id, el) {
     const tc = document.getElementById('tab-cafe24');
     if (tc) { tc.style.display = 'flex'; tc.classList.add('active'); }
     renderCafe24();
+  } else if (id === 'dome-supply') {
+    const tc = document.getElementById('tab-dome-supply');
+    if (tc) { tc.style.display = 'flex'; tc.classList.add('active'); }
+    renderDomeSupply();
   } else {
     const tc = document.getElementById('tab-' + id);
     if (tc) { tc.style.display = 'flex'; tc.classList.add('active'); }
@@ -1032,6 +1119,90 @@ function dlC4TrackingCsv() {
 }
 
 // ── 주문 패널 (카페24 / 토스쇼핑 공용) ──
+// ── 도매꾹(공급) 탭: 우리가 공급자로 등록해 판매하는 경우 ──
+// n8n 워크플로우 "SoulKit 도매꾹(공급) 주문관리" (webhook 3종) 연동
+// TODO: 사업자·도매매 로그인 계정 확정 후 dsup-biz-sel 옵션 채우고 실제 조회 활성화
+let DomeSupply = { bizId: null, orders: [], checkedNos: new Set() };
+
+function onDomeSupplyBizChange() {
+  const sel = document.getElementById('dsup-biz-sel');
+  DomeSupply.bizId = sel ? sel.value : null;
+  renderDomeSupply();
+}
+
+function renderDomeSupply() {
+  const panel = document.getElementById('dsup-order-panel-body');
+  if (!panel) return;
+  if (!DomeSupply.bizId) {
+    panel.innerHTML = '<div style="padding:24px;text-align:center;color:var(--tx3);font-size:13px">사업자 계정(도매매 로그인) 연동 전이라 임시 화면입니다.<br>n8n 워크플로우 "SoulKit 도매꾹(공급) 주문관리" 준비 완료 — 사업자·계정 확정 후 연결됩니다.</div>';
+    return;
+  }
+  if (!DomeSupply.orders.length) {
+    panel.innerHTML = '<div class="empty-state"><p>새로고침을 눌러 주문내역을 불러오세요</p></div>';
+    return;
+  }
+  panel.innerHTML = '<table class="mt"><thead><tr><th></th><th>주문번호</th><th>상품명</th><th>수량</th><th>주문금액</th></tr></thead><tbody>' +
+    DomeSupply.orders.map(o => '<tr><td><input type="checkbox" data-no="' + o.orderNo + '" onchange="toggleDomeSupplyOrder(this)"></td><td>' + o.orderNo + '</td><td>' + (o.itemTitle || '') + '</td><td>' + (o.orderQty || '') + '</td><td>' + (o.orderAmtPay || '') + '</td></tr>').join('') +
+    '</tbody></table>';
+}
+
+function toggleDomeSupplyOrder(el) {
+  const no = el.getAttribute('data-no');
+  if (el.checked) DomeSupply.checkedNos.add(no); else DomeSupply.checkedNos.delete(no);
+}
+
+async function fetchDomeSupplyOrders() {
+  if (!DomeSupply.bizId) { toast('사업자를 먼저 선택하세요 (현재 미정)', 'err'); return; }
+  try {
+    const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-domeggook-supply-orders?biz=' + DomeSupply.bizId);
+    if (!res.ok) throw new Error('서버 오류: ' + res.status);
+    const json = await res.json();
+    DomeSupply.orders = Array.isArray(json?.domeggook?.items) ? json.domeggook.items : (Array.isArray(json.items) ? json.items : []);
+    renderDomeSupply();
+    toast('주문 ' + DomeSupply.orders.length + '건 불러옴', 'ok');
+  } catch (e) {
+    toast('불러오기 실패: ' + e.message, 'err');
+  }
+}
+
+async function confirmDomeSupplyOrders() {
+  const nos = Array.from(DomeSupply.checkedNos);
+  if (!nos.length) { toast('발주확인할 주문을 체크하세요', 'err'); return; }
+  try {
+    const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-domeggook-supply-confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bizId: DomeSupply.bizId, orderNos: nos })
+    });
+    if (!res.ok) throw new Error('서버 오류: ' + res.status);
+    const json = await res.json();
+    document.getElementById('dsup-confirm-result').innerHTML = '<div style="margin-top:8px;font-size:12px;color:var(--tx2)">' + JSON.stringify(json) + '</div>';
+    toast('발주확인 요청 완료', 'ok');
+  } catch (e) {
+    toast('발주확인 실패: ' + e.message, 'err');
+  }
+}
+
+async function submitDomeSupplyInvoice() {
+  const orderNo = document.getElementById('dsup-inv-orderno').value.trim();
+  const courierCode = document.getElementById('dsup-inv-courier').value;
+  const invoiceNo = document.getElementById('dsup-inv-code').value.trim();
+  if (!orderNo || !invoiceNo) { toast('주문번호와 송장번호를 입력하세요', 'err'); return; }
+  try {
+    const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-domeggook-supply-invoice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bizId: DomeSupply.bizId, orderNo, courierCode, invoiceNo, updateType: 'add' })
+    });
+    if (!res.ok) throw new Error('서버 오류: ' + res.status);
+    const json = await res.json();
+    document.getElementById('dsup-invoice-result').innerHTML = '<div style="margin-top:8px;font-size:12px;color:var(--tx2)">' + JSON.stringify(json) + '</div>';
+    toast('송장 등록 요청 완료', 'ok');
+  } catch (e) {
+    toast('송장 등록 실패: ' + e.message, 'err');
+  }
+}
+
 async function fetchC4Orders() {
   C4Panel.loading = true; C4Panel.error = null; C4Panel.orders = []; C4Panel.checkedIds = new Set();
   renderC4OrderPanel();
