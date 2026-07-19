@@ -137,6 +137,13 @@ input[type=text]:focus{border-color:var(--gold);}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:3px;}
 
+/* 도매꾹 위탁 dome 토글 */
+.dome-tog-wrap{display:flex;align-items:center;gap:3px;margin-left:6px;flex-shrink:0;padding:2px 6px;border-radius:4px;border:1px solid var(--bdr);background:var(--sur3);}
+.dome-tog-wrap input{accent-color:var(--blue);width:12px;height:12px;cursor:pointer;flex-shrink:0;}
+.dome-tog-lbl{font-size:10px;color:var(--tx3);white-space:nowrap;cursor:pointer;user-select:none;}
+.dome-tog-wrap.is-dome{border-color:var(--blb);background:var(--bl);}
+.dome-tog-wrap.is-dome .dome-tog-lbl{color:var(--blue);}
+
 /* 모달 select */
 select.modal-sel{width:100%;padding:7px 10px;background:var(--sur2);border:1px solid var(--bdr2);border-radius:var(--rs);font-size:12px;font-family:'Noto Sans KR',sans-serif;color:var(--tx);outline:none;}
 select.modal-sel option{background:var(--sur2);}
@@ -389,137 +396,68 @@ select.modal-sel option{background:var(--sur2);}
   </div>
 </div>
 
-<!-- 도매꾹(위탁) 탭: 위탁 발주 생성 및 송장 조회 -->
+<!-- 도매꾹(위탁) 탭: 카페24 주문 중 도매매/도매꾹 위탁 상품 필터링 + 일괄발주 + 송장조회 -->
 <div id="tab-dome-consign" class="tab-content" style="display:none">
-  <div class="c4-layout">
-    <div class="c4-inner">
+  <div class="c4-two-col">
 
-      <!-- STEP A: 발주 생성 -->
-      <div class="step-block">
-        <div class="step-label">STEP A</div>
-        <div class="step-title">발주 생성</div>
-
-        <div class="field-group">
-          <div class="field-label">사업자 선택</div>
-          <select class="biz-select" id="dcon-biz-sel" style="flex:unset;width:100%">
-            <option value="">사업자 선택...</option>
-          </select>
-        </div>
-
-        <div class="field-group">
-          <div class="field-label">상품번호 (itemNo)</div>
-          <input type="text" id="dcon-item-no" placeholder="예: 12345678">
-        </div>
-
-        <div class="field-group">
-          <div class="field-label">구매채널 (market)</div>
-          <select class="biz-select" id="dcon-market" style="flex:unset;width:100%">
-            <option value="dome">dome</option>
-            <option value="supply">supply</option>
-          </select>
-        </div>
-
-        <div class="field-group">
-          <div class="field-label">배송비부담 (deliWho)</div>
-          <select class="biz-select" id="dcon-deli-who" style="flex:unset;width:100%">
-            <option value="S">S - 무료배송</option>
-            <option value="B">B - 착불</option>
-            <option value="P">P - 선결제</option>
-          </select>
-        </div>
-
-        <div class="field-group">
-          <div class="field-label">옵션코드 / 수량</div>
-          <div id="dcon-options-list">
-            <div class="dcon-option-row" style="display:flex;gap:8px;margin-bottom:6px">
-              <input type="text" placeholder="옵션코드 (예: 00)" style="flex:2" class="dcon-opt-code">
-              <input type="text" placeholder="수량" style="flex:1" class="dcon-opt-qty">
-            </div>
-          </div>
-          <button class="btn btn-ghost" onclick="addDomeConsignOption()" style="margin-top:4px">+ 옵션 추가</button>
-        </div>
-
-        <div class="field-group">
-          <div class="field-label">판매자전달사항</div>
-          <textarea id="dcon-seller-memo" maxlength="256" placeholder="판매자 전달 사항 입력" style="width:100%;padding:8px 12px;background:var(--sur2);border:1px solid var(--bdr2);border-radius:var(--rs);font-size:13px;font-family:'Noto Sans KR',sans-serif;color:var(--tx);outline:none;resize:vertical;min-height:60px;transition:border-color .15s;" onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--bdr2)'"></textarea>
-        </div>
-
-        <div class="field-group">
-          <div class="field-label">배송요청사항 <span style="color:var(--tx3);font-size:10px">(선택)</span></div>
-          <textarea id="dcon-delivery-request" maxlength="256" placeholder="배송 요청 사항 입력 (선택)" style="width:100%;padding:8px 12px;background:var(--sur2);border:1px solid var(--bdr2);border-radius:var(--rs);font-size:13px;font-family:'Noto Sans KR',sans-serif;color:var(--tx);outline:none;resize:vertical;min-height:60px;transition:border-color .15s;" onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--bdr2)'"></textarea>
-        </div>
-
-        <div class="field-group">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--tx2)">
-            <input type="checkbox" id="dcon-receipt" style="accent-color:var(--gold);width:14px;height:14px;">
-            세금계산서 발행 요청
-          </label>
-        </div>
-
-        <div class="divider"></div>
-        <div style="font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:12px">수령인 정보</div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div class="field-group" style="margin-bottom:0">
-            <div class="field-label">성명</div>
-            <input type="text" id="dcon-rec-name" placeholder="수령인 성명">
-          </div>
-          <div class="field-group" style="margin-bottom:0">
-            <div class="field-label">이메일</div>
-            <input type="text" id="dcon-rec-email" placeholder="이메일 주소">
-          </div>
-          <div class="field-group" style="margin-bottom:0">
-            <div class="field-label">우편번호</div>
-            <input type="text" id="dcon-rec-zip" placeholder="우편번호">
-          </div>
-          <div class="field-group" style="margin-bottom:0">
-            <div class="field-label">휴대전화</div>
-            <input type="text" id="dcon-rec-mobile" placeholder="010-0000-0000">
-          </div>
-        </div>
-
-        <div class="field-group" style="margin-top:10px">
-          <div class="field-label">주소1</div>
-          <input type="text" id="dcon-rec-addr1" placeholder="기본 주소">
-        </div>
-
-        <div class="field-group">
-          <div class="field-label">주소2</div>
-          <input type="text" id="dcon-rec-addr2" placeholder="상세 주소">
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div class="field-group" style="margin-bottom:0">
-            <div class="field-label">추가연락처</div>
-            <input type="text" id="dcon-rec-phone" placeholder="추가 연락처 (선택)">
-          </div>
-          <div class="field-group" style="margin-bottom:0">
-            <div class="field-label">쇼핑몰명 (상호명)</div>
-            <input type="text" id="dcon-rec-shop" placeholder="쇼핑몰명 또는 상호명">
-          </div>
-        </div>
-
-        <div class="field-group" style="margin-top:10px">
-          <div class="field-label">통관고유부호</div>
-          <input type="text" id="dcon-rec-customs" placeholder="통관고유부호 (선택)">
-        </div>
-
-        <button class="btn btn-gold btn-full" onclick="submitDomeConsignOrder()" style="margin-top:8px">발주 생성</button>
-        <div id="dcon-order-result"></div>
+    <!-- ▌왼쪽: 사업자 선택 + 주문내역 -->
+    <div class="c4-left-panel">
+      <div class="biz-bar" style="flex-shrink:0;margin-bottom:0">
+        <select class="biz-select" id="dcon-biz-sel" onchange="onDomeConsignBizChange()">
+          <option value="">사업자 선택...</option>
+        </select>
+        <button class="btn-add-biz" onclick="fetchDomeConsignOrders()" style="white-space:nowrap">↻ 새로고침</button>
       </div>
 
-      <!-- STEP B: 송장 조회 -->
+      <div class="step-block c4-order-block">
+        <div class="step-label">도매매 위탁 주문</div>
+        <div class="step-title" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--bdr)">
+          주문내역
+          <span style="font-size:10px;color:var(--tx3);font-weight:400">custom_product_code "도매매 " 시작 아이템만 표시</span>
+        </div>
+        <div id="dcon-order-panel-body"></div>
+      </div>
+    </div>
+
+    <!-- ▌오른쪽: STEP A + STEP B -->
+    <div class="c4-right-panel">
+
+      <!-- STEP A -->
       <div class="step-block">
-        <div class="step-label">STEP B</div>
-        <div class="step-title">송장 조회</div>
+        <div class="step-label">STEP A</div>
+        <div class="step-title">도매꾹 주문내역 일괄 발송 엑셀 생성</div>
 
         <div class="field-group">
-          <div class="field-label">주문번호 (orderNo)</div>
-          <input type="text" id="dcon-status-orderno" placeholder="발주 생성 후 받은 주문번호">
+          <div class="field-label" style="line-height:1.6">
+            체크한 주문의 도매매 아이템을 발주 엑셀로 변환합니다.<br>
+            <span style="color:var(--tx3);font-size:11px">각 행의 <b style="color:var(--blue)">도매꾹</b> 토글 체크 시 dome, 미체크 시 supply 채널로 발주됩니다.</span>
+          </div>
         </div>
 
-        <button class="btn btn-gold btn-full" onclick="queryDomeConsignStatus()">송장 조회</button>
-        <div id="dcon-status-result"></div>
+        <button class="btn btn-gold btn-full" id="dcon-export-btn" onclick="domeConsignExportExcel()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
+          일괄 발송 엑셀 생성
+        </button>
+        <div id="dcon-export-result"></div>
+      </div>
+
+      <!-- STEP B -->
+      <div class="step-block">
+        <div class="step-label">STEP B</div>
+        <div class="step-title">송장 조회 → 카페24 운송장 CSV</div>
+
+        <div class="field-group">
+          <div class="field-label" style="line-height:1.6">
+            최근 15일 도매꾹 구매 주문의 송장을 조회하여<br>
+            <span style="color:var(--tx3);font-size:11px">왼쪽 카페24 주문과 수령인 휴대전화로 매칭 후 CSV 다운로드</span>
+          </div>
+        </div>
+
+        <button class="btn btn-gold btn-full" onclick="domeConsignQueryInvoices()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          송장 조회
+        </button>
+        <div id="dcon-stepb-result"></div>
       </div>
 
     </div>
@@ -1345,102 +1283,322 @@ async function submitDomeSupplyInvoice() {
 }
 
 // ── 도매꾹(위탁) 탭 ──
+const DOME_CONSIGN_STATUS_TABS = ['마켓발주전', '배송준비중', '배송대기', '배송중', '배송완료'];
+let DomeConsign = { bizId: null, orders: [], loading: false, error: null, activeTab: '마켓발주전', checkedIds: new Set(), domeToggle: {} };
+
+function onDomeConsignBizChange() {
+  DomeConsign.bizId = document.getElementById('dcon-biz-sel').value || null;
+  DomeConsign.orders = []; DomeConsign.checkedIds = new Set(); DomeConsign.domeToggle = {};
+  DomeConsign.error = null; DomeConsign.loading = false;
+  renderDomeConsignPanel();
+  if (DomeConsign.bizId) fetchDomeConsignOrders();
+}
+
 function renderDomeConsign() {
   const sel = document.getElementById('dcon-biz-sel');
   if (!sel) return;
+  const bizList = DB.businesses.filter(b => ['b1','b2','b3'].includes(b.id));
   sel.innerHTML = '<option value="">사업자 선택...</option>' +
-    DB.businesses.filter(b => ['b1','b2','b3'].includes(b.id))
-      .map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+    bizList.map(b => `<option value="${b.id}" ${b.id === DomeConsign.bizId ? 'selected' : ''}>${b.name}</option>`).join('');
+  renderDomeConsignPanel();
 }
 
-function addDomeConsignOption() {
-  const list = document.getElementById('dcon-options-list');
-  if (!list) return;
-  const row = document.createElement('div');
-  row.className = 'dcon-option-row';
-  row.style.cssText = 'display:flex;gap:8px;margin-bottom:6px';
-  row.innerHTML = '<input type="text" placeholder="옵션코드 (예: 00)" style="flex:2" class="dcon-opt-code">' +
-    '<input type="text" placeholder="수량" style="flex:1" class="dcon-opt-qty">' +
-    '<button class="btn btn-sm btn-danger" onclick="this.parentElement.remove()" style="flex-shrink:0">×</button>';
-  list.appendChild(row);
-}
-
-async function submitDomeConsignOrder() {
-  const bizId = document.getElementById('dcon-biz-sel').value;
-  if (!bizId) { toast('사업자를 선택하세요', 'err'); return; }
-  const itemNo = document.getElementById('dcon-item-no').value.trim();
-  if (!itemNo) { toast('상품번호를 입력하세요', 'err'); return; }
-  const market = document.getElementById('dcon-market').value;
-  const deliWho = document.getElementById('dcon-deli-who').value;
-  const sellerMemo = document.getElementById('dcon-seller-memo').value.trim();
-  const deliveryRequest = document.getElementById('dcon-delivery-request').value.trim();
-  const receipt = document.getElementById('dcon-receipt').checked;
-  const optionRows = document.querySelectorAll('#dcon-options-list .dcon-option-row');
-  const options = Array.from(optionRows).map(row => ({
-    code: row.querySelector('.dcon-opt-code').value.trim(),
-    qty: parseInt(row.querySelector('.dcon-opt-qty').value.trim(), 10) || 1
-  })).filter(o => o.code !== '');
-  if (!options.length) { toast('옵션코드를 입력하세요', 'err'); return; }
-  const receiver = {
-    name: document.getElementById('dcon-rec-name').value.trim(),
-    email: document.getElementById('dcon-rec-email').value.trim(),
-    zipCode: document.getElementById('dcon-rec-zip').value.trim(),
-    addr1: document.getElementById('dcon-rec-addr1').value.trim(),
-    addr2: document.getElementById('dcon-rec-addr2').value.trim(),
-    mobile: document.getElementById('dcon-rec-mobile').value.trim(),
-    phone: document.getElementById('dcon-rec-phone').value.trim(),
-    shopName: document.getElementById('dcon-rec-shop').value.trim(),
-    personalCustomsCode: document.getElementById('dcon-rec-customs').value.trim()
-  };
-  if (!receiver.name || !receiver.mobile || !receiver.addr1) {
-    toast('수령인 성명, 휴대전화, 주소1은 필수입니다', 'err'); return;
+function domeConsignOrderStatus(order) {
+  if (order.shipping_status === 'F') {
+    return order.tracking_no ? '배송대기' : '배송준비중';
   }
-  const resultEl = document.getElementById('dcon-order-result');
-  resultEl.innerHTML = '<div style="margin-top:8px;font-size:12px;color:var(--tx2)">발주 생성 중...</div>';
+  return C4_STATUS_MAP[order.shipping_status] || null;
+}
+
+function domeConsignFilteredOrders() {
+  return DomeConsign.orders.filter(o => domeConsignOrderStatus(o) === DomeConsign.activeTab);
+}
+
+function renderDomeConsignPanel() {
+  const panel = document.getElementById('dcon-order-panel-body');
+  if (!panel) return;
+
+  if (!DomeConsign.bizId) {
+    panel.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg><p>사업자를 선택하면<br>주문내역이 표시됩니다</p></div>';
+    return;
+  }
+  if (DomeConsign.loading) {
+    panel.innerHTML = '<div class="empty-state"><p style="color:var(--tx2)">주문 데이터를 불러오는 중...</p></div>';
+    return;
+  }
+  if (DomeConsign.error) {
+    panel.innerHTML = '<div class="empty-state"><p style="color:var(--red);font-size:12px">' + DomeConsign.error + '</p><button class="btn btn-sm" style="margin-top:8px" onclick="fetchDomeConsignOrders()">다시 시도</button></div>';
+    return;
+  }
+
+  const tabsHtml = DOME_CONSIGN_STATUS_TABS.map(tab => {
+    const cnt = DomeConsign.orders.filter(o => domeConsignOrderStatus(o) === tab).length;
+    return '<button class="order-status-tab' + (tab === DomeConsign.activeTab ? ' active' : '') + '" onclick="domeConsignSetTab(\'' + tab + '\')">' +
+      tab + '<span class="o-tab-cnt">' + cnt + '</span></button>';
+  }).join('');
+
+  const filtered = domeConsignFilteredOrders();
+  const allChecked = filtered.length > 0 && filtered.every(o => DomeConsign.checkedIds.has(o.order_id));
+
+  const rowsHtml = filtered.length ? filtered.map(order => {
+    const checked = DomeConsign.checkedIds.has(order.order_id);
+    const isDome = !!DomeConsign.domeToggle[order.order_id];
+    const r = (order.receivers && order.receivers[0]) || {};
+    const item = (order.items || []).find(i => (i.custom_product_code || '').startsWith('도매매 ')) || (order.items && order.items[0]) || {};
+    const date = (order.order_date || '').substring(0, 10);
+    const rName = r.name || r.receiver_name || order.billing_name || '-';
+    const domeItems = (order.items || []).filter(i => (i.custom_product_code || '').startsWith('도매매 '));
+    const qty = domeItems.reduce((s, i) => s + (parseInt(i.quantity, 10) || 1), 0);
+    const pName = (item.product_name || '-') + ' x' + qty + '개';
+    const oid = order.order_id.replace(/'/g, "\\'");
+    const togId = 'dome-tog-' + order.order_id.replace(/[^a-zA-Z0-9]/g, '_');
+    return '<div class="order-row' + (checked ? ' chk-sel' : '') + '" onclick="domeConsignRowClick(\'' + oid + '\')">' +
+      '<input type="checkbox" class="o-chk" ' + (checked ? 'checked' : '') + ' onclick="event.stopPropagation()" onchange="domeConsignCheckOrder(\'' + oid + '\',this.checked)">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">' +
+          '<span style="font-size:11px;color:var(--gold);font-family:\'JetBrains Mono\',monospace;flex-shrink:0">' + order.order_id + '</span>' +
+          '<span style="font-size:10px;color:var(--tx3)">' + date + '</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:5px;align-items:center;margin-top:2px">' +
+          '<span style="font-size:12px;font-weight:500;flex-shrink:0">' + rName + '</span>' +
+          '<span style="font-size:11px;color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + pName + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="dome-tog-wrap' + (isDome ? ' is-dome' : '') + '" id="' + togId + '" onclick="event.stopPropagation()">' +
+        '<input type="checkbox" id="' + togId + '-chk" ' + (isDome ? 'checked' : '') + ' onchange="domeConsignToggleDome(\'' + oid + '\',this.checked,\'' + togId + '\')">' +
+        '<label class="dome-tog-lbl" for="' + togId + '-chk">도매꾹</label>' +
+      '</div>' +
+      '</div>';
+  }).join('') : '<div class="empty-state" style="padding:20px 20px"><p>해당 상태의 주문이 없습니다</p></div>';
+
+  panel.innerHTML =
+    '<div class="order-status-tabs" style="flex-shrink:0">' + tabsHtml + '</div>' +
+    '<div class="order-list-hdr">' +
+      '<input type="checkbox" class="o-chk" id="dcon-sel-all"' + (allChecked ? ' checked' : '') + (filtered.length ? '' : ' disabled') + ' onchange="domeConsignSelectAll(this.checked)">' +
+      '<label for="dcon-sel-all" style="cursor:pointer">전체선택</label>' +
+      '<span style="margin-left:auto;font-size:11px;color:var(--tx3)">' + DomeConsign.checkedIds.size + '건 선택</span>' +
+    '</div>' +
+    '<div class="order-list-body">' + rowsHtml + '</div>';
+}
+
+function domeConsignSetTab(tab) { DomeConsign.activeTab = tab; renderDomeConsignPanel(); }
+function domeConsignRowClick(oid) { domeConsignCheckOrder(oid, !DomeConsign.checkedIds.has(oid)); }
+function domeConsignCheckOrder(oid, checked) {
+  if (checked) DomeConsign.checkedIds.add(oid); else DomeConsign.checkedIds.delete(oid);
+  renderDomeConsignPanel();
+}
+function domeConsignSelectAll(checked) {
+  domeConsignFilteredOrders().forEach(o => checked ? DomeConsign.checkedIds.add(o.order_id) : DomeConsign.checkedIds.delete(o.order_id));
+  renderDomeConsignPanel();
+}
+function domeConsignToggleDome(oid, isDome, togId) {
+  DomeConsign.domeToggle[oid] = isDome;
+  const wrap = document.getElementById(togId);
+  if (wrap) { if (isDome) wrap.classList.add('is-dome'); else wrap.classList.remove('is-dome'); }
+}
+
+async function fetchDomeConsignOrders() {
+  if (!DomeConsign.bizId) { toast('사업자를 먼저 선택하세요', 'err'); return; }
+  DomeConsign.loading = true; DomeConsign.error = null; DomeConsign.orders = []; DomeConsign.checkedIds = new Set();
+  renderDomeConsignPanel();
   try {
-    const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-domeggook-consign-order', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bizId, itemNo, market, deliWho, options, sellerMemo, deliveryRequest, receipt, receiver })
-    });
+    const biz = DB.businesses.find(b => b.id === DomeConsign.bizId);
+    const bizCode = { '소울스토어':'soul', '제이원투몰':'j1', '행복산업':'happy' }[biz?.name] || 'soul';
+    const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-orders-list?biz=' + bizCode);
     if (!res.ok) throw new Error('서버 오류: ' + res.status);
     const json = await res.json();
-    resultEl.innerHTML = '<div style="margin-top:10px;padding:12px 14px;background:var(--gl);border:1px solid var(--gb);border-radius:var(--rs)">' +
-      '<div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:6px">발주 생성 완료</div>' +
-      '<pre style="font-size:11px;color:var(--tx2);white-space:pre-wrap;word-break:break-all">' + JSON.stringify(json, null, 2) + '</pre></div>';
-    toast('발주 생성 완료', 'ok');
+    const allOrders = Array.isArray(json.orders) ? json.orders : [];
+    // 도매매 위탁 아이템이 하나라도 있는 주문만 필터
+    DomeConsign.orders = allOrders.filter(order =>
+      (order.items || []).some(item => (item.custom_product_code || '').startsWith('도매매 '))
+    );
+    DomeConsign.loading = false;
+    renderDomeConsignPanel();
+    toast('도매매 위탁 주문 ' + DomeConsign.orders.length + '건 불러옴 (전체 ' + allOrders.length + '건 중)', 'ok');
   } catch (e) {
-    resultEl.innerHTML = '<div style="margin-top:8px;font-size:12px;color:var(--red)">오류: ' + e.message + '</div>';
-    toast('발주 생성 실패: ' + e.message, 'err');
+    DomeConsign.loading = false; DomeConsign.error = e.message;
+    renderDomeConsignPanel();
+    toast('불러오기 실패: ' + e.message, 'err');
   }
 }
 
-async function queryDomeConsignStatus() {
-  const bizId = document.getElementById('dcon-biz-sel').value;
-  if (!bizId) { toast('사업자를 선택하세요', 'err'); return; }
-  const orderNo = document.getElementById('dcon-status-orderno').value.trim();
-  if (!orderNo) { toast('주문번호를 입력하세요', 'err'); return; }
-  const resultEl = document.getElementById('dcon-status-result');
-  resultEl.innerHTML = '<div style="margin-top:8px;font-size:12px;color:var(--tx2)">조회 중...</div>';
+async function domeConsignExportExcel() {
+  if (!DomeConsign.bizId) return toast('사업자를 선택하세요', 'err');
+  if (!DomeConsign.checkedIds.size) return toast('주문을 선택하세요', 'err');
+
+  const biz = DB.businesses.find(b => b.id === DomeConsign.bizId);
+  const bizName = biz?.name || '';
+  const resultEl = document.getElementById('dcon-export-result');
+  resultEl.innerHTML = '<div style="margin-top:8px;font-size:12px;color:var(--tx2)">옵션 코드 조회 중... (잠시 기다려 주세요)</div>';
+
+  // sourcing state 일괄 조회
+  let sourcingStates = [];
   try {
-    const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-domeggook-consign-status?bizId=' + encodeURIComponent(bizId) + '&orderNo=' + encodeURIComponent(orderNo));
+    const sr = await fetch('https://n8n.wonflowai.com/webhook/soulkit-sourcing-state-get-v2');
+    if (sr.ok) { const sj = await sr.json(); sourcingStates = Array.isArray(sj) ? sj : []; }
+  } catch (_) {}
+
+  // 상품별 item detail 캐시
+  const itemDetailCache = {};
+  const dataRows = [];
+  const checkedOrders = DomeConsign.orders.filter(o => DomeConsign.checkedIds.has(o.order_id));
+
+  for (const order of checkedOrders) {
+    const market = DomeConsign.domeToggle[order.order_id] ? 'dome' : 'supply';
+    const r = (order.receivers && order.receivers[0]) || {};
+    const recName = r.name || r.receiver_name || order.billing_name || '';
+    const zipcode = r.zipcode || r.receiver_zipcode || '';
+    const address = r.address1 || r.address || r.receiver_address || '';
+    const addressDetail = r.address2 || r.address_detail || r.receiver_address_detail || '';
+    const phone = r.phone || r.cellphone || r.receiver_phone || r.receiver_mobile || '';
+    const phone2 = r.phone2 || r.tel || r.receiver_tel || '';
+
+    const domeItems = (order.items || []).filter(item => (item.custom_product_code || '').startsWith('도매매 '));
+
+    for (const item of domeItems) {
+      const itemNo = (item.custom_product_code || '').replace(/^도매매\s+/, '').trim();
+      const quantity = item.quantity || 1;
+      const variantCode = item.variant_code || item.option_id || item.option_code || '';
+
+      let optionCode = '00';
+      let optionName = '';
+
+      // sourcing state에서 해당 상품 찾기
+      const ss = sourcingStates.find(s => String(s.itemNo) === String(itemNo) && s.mall === bizName);
+      if (ss) {
+        const optMap = ss.option_map;
+        if (Array.isArray(optMap) && optMap.length > 0 && variantCode) {
+          const mapEntry = optMap.find(m => String(m.variant_code) === String(variantCode));
+          if (mapEntry !== undefined) {
+            const idx = mapEntry.index;
+            // item detail 조회 (캐시)
+            if (!itemDetailCache[itemNo]) {
+              try {
+                const dr = await fetch('https://n8n.wonflowai.com/webhook/soulkit-domeggook-item-detail', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ itemNo })
+                });
+                if (dr.ok) itemDetailCache[itemNo] = await dr.json();
+              } catch (_) {}
+            }
+            const detail = itemDetailCache[itemNo];
+            const combos = detail?.options?.combinations;
+            if (combos && combos[idx]) {
+              optionCode = combos[idx].key || '00';
+              optionName = combos[idx].name || '';
+            }
+          }
+        }
+      }
+
+      dataRows.push([
+        market, itemNo, optionCode, optionName, quantity,
+        recName, zipcode, address, addressDetail, phone, phone2,
+        bizName, '', '', ''
+      ]);
+    }
+  }
+
+  if (!dataRows.length) {
+    resultEl.innerHTML = '<div style="margin-top:8px;font-size:12px;color:var(--red)">변환할 도매매 아이템이 없습니다</div>';
+    return toast('변환할 도매매 아이템이 없습니다', 'err');
+  }
+
+  const headers = [
+    '마켓', '상품번호', '옵션코드', '옵션명', '수량',
+    '수령자명', '우편번호', '배송주소', '배송 상세주소\n(선택입력)',
+    '휴대전화', '추가연락처\n(선택입력)', '쇼핑몰명\n(도매매 전용)',
+    '전달사항', '배송요청사항\n(도매매 전용)', '통관고유번호\n(해외직배송 전용)'
+  ];
+
+  const filename = `도매꾹위탁발주_${bizName}_${today()}.xlsx`;
+  dlXlsx([headers, ...dataRows], filename);
+  resultEl.innerHTML = `<div class="file-done-sm" style="margin-top:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>${filename} · ${dataRows.length}행 생성됨</div>`;
+  toast(filename + ' 다운로드!', 'ok');
+}
+
+async function domeConsignQueryInvoices() {
+  if (!DomeConsign.bizId) return toast('사업자를 선택하세요', 'err');
+  const resultEl = document.getElementById('dcon-stepb-result');
+  resultEl.innerHTML = '<div style="margin-top:8px;font-size:12px;color:var(--tx2)">도매꾹 송장 조회 중...</div>';
+
+  const bizCode = getBizWebhookCode(DomeConsign.bizId);
+  try {
+    const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-domeggook-consign-orderlist?biz=' + bizCode + '&day=15');
     if (!res.ok) throw new Error('서버 오류: ' + res.status);
-    const json = await res.json();
-    const invoiceNo = json.invoiceNo || json.invoice_no || '-';
-    const carrier = json.carrier || json.courierName || '-';
-    const confirmedAt = json.confirmedAt || json.orderConfirmDate || '-';
-    resultEl.innerHTML = '<div style="margin-top:10px;padding:12px 14px;background:var(--gl);border:1px solid var(--gb);border-radius:var(--rs)">' +
-      '<div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:8px">송장 조회 결과</div>' +
-      '<div style="font-size:12px;color:var(--tx2);line-height:1.8">' +
-      '<div>송장번호: <span style="color:var(--tx);font-weight:500">' + invoiceNo + '</span></div>' +
-      '<div>택배사: <span style="color:var(--tx);font-weight:500">' + carrier + '</span></div>' +
-      '<div>발주확인일자: <span style="color:var(--tx);font-weight:500">' + confirmedAt + '</span></div>' +
-      '</div></div>';
-    toast('송장 조회 완료', 'ok');
+    const raw = await res.json();
+    const domeOrders = Array.isArray(raw) ? raw : (raw.orders || raw.items || []);
+
+    // 왼쪽 패널 주문 → 전화번호 인덱스
+    const phoneToC4Order = {};
+    DomeConsign.orders.forEach(o => {
+      const r = (o.receivers && o.receivers[0]) || {};
+      const ph = normPhoneCC(r.phone || r.cellphone || r.receiver_phone || r.receiver_mobile || '');
+      if (ph) phoneToC4Order[ph] = o;
+    });
+
+    const matched = [];
+    let noInvoiceCnt = 0, noMatchCnt = 0;
+
+    domeOrders.forEach(domeOrder => {
+      const ph = normPhoneCC(
+        domeOrder.receiverPhone || domeOrder.receiver_phone || domeOrder.mobile ||
+        domeOrder.receiverMobile || domeOrder.phone || ''
+      );
+      const trackingNo = (domeOrder.delivery && domeOrder.delivery.code)
+        || domeOrder.invoiceNo || domeOrder.invoice_no || domeOrder.trackingNo || '';
+
+      const c4Order = phoneToC4Order[ph];
+      if (!c4Order) { noMatchCnt++; return; }
+      if (!trackingNo) { noInvoiceCnt++; return; }
+
+      const trackingClean = String(trackingNo).replace(/[^0-9-]/g, '');
+      // 도매매 아이템마다 item_order_no 한 행씩
+      const domeItems = (c4Order.items || []).filter(i => (i.custom_product_code || '').startsWith('도매매 '));
+      if (domeItems.length) {
+        domeItems.forEach(item => {
+          const itemOrderNo = item.order_item_code || item.item_order_no || c4Order.item_order_no || c4Order.order_id;
+          matched.push([c4Order.order_id, itemOrderNo, trackingClean, '']);
+        });
+      } else {
+        matched.push([c4Order.order_id, c4Order.item_order_no || c4Order.order_id, trackingClean, '']);
+      }
+    });
+
+    window._dconMatchedRows = matched;
+
+    const failHtml = (noInvoiceCnt + noMatchCnt) ? `
+      <div style="margin-top:6px;font-size:11px;color:var(--tx3)">
+        ${noMatchCnt ? '카페24 미매칭: ' + noMatchCnt + '건 · ' : ''}${noInvoiceCnt ? '송장없음: ' + noInvoiceCnt + '건' : ''}
+      </div>` : '';
+
+    const dlBtn = matched.length ? `
+      <button class="btn btn-gold btn-full" style="margin-top:12px" onclick="domeConsignDlCsv()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
+        카페24 운송장 업로드 CSV 다운로드 (${matched.length}건)
+      </button>` : '';
+
+    resultEl.innerHTML = `
+      <div class="match-result-box" style="margin-top:10px">
+        <div class="match-result-title">매칭 ${matched.length}건 / 송장없음 ${noInvoiceCnt}건 / 미매칭 ${noMatchCnt}건</div>
+        ${failHtml}
+      </div>${dlBtn}`;
+
+    if (matched.length) toast('매칭 완료: ' + matched.length + '건', 'ok');
+    else toast('매칭된 주문이 없습니다', 'err');
   } catch (e) {
     resultEl.innerHTML = '<div style="margin-top:8px;font-size:12px;color:var(--red)">오류: ' + e.message + '</div>';
     toast('송장 조회 실패: ' + e.message, 'err');
   }
+}
+
+function domeConsignDlCsv() {
+  const rows = window._dconMatchedRows;
+  if (!rows?.length) return;
+  const filename = '카페24_운송장업로드_도매꾹위탁_' + today() + '.csv';
+  dlCsv([['주문번호', '품목별 주문번호', '운송장번호', '수량'], ...rows], filename);
+  toast(filename + ' 다운로드!', 'ok');
 }
 
 async function fetchC4Orders() {
