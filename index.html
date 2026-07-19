@@ -324,6 +324,7 @@ select.modal-sel option{background:var(--sur2);}
         <select class="biz-select" id="dsup-biz-sel" onchange="onDomeSupplyBizChange()">
           <option value="">사업자 선택... (미정 - 연동 대기)</option>
         </select>
+        <button class="btn-add-biz" onclick="openModal('m-add-biz')">+ 사업자 추가</button>
       </div>
 
       <div class="step-block">
@@ -342,6 +343,12 @@ select.modal-sel option{background:var(--sur2);}
 
     <!-- ▌오른쪽: 발주확인 / 송장입력 -->
     <div class="c4-right-panel">
+
+      <!-- 풀 카운터 -->
+      <div class="pool-bar">
+        <div class="pool-count">오늘 누적 매칭 풀: <span class="cnt" id="dsup-pool-count">0</span>건</div>
+        <button class="btn btn-sm btn-danger" onclick="clearPool()">초기화</button>
+      </div>
 
       <div class="step-block">
         <div class="step-label">STEP A</div>
