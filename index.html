@@ -579,7 +579,7 @@ const TOSS_STATUS_MAP = {
 const TOSS_STATUS_TABS = ['결제완료', '상품준비중', '배송중', '배송완료', '구매확정'];
 
 // 카페24 주문 패널 상태
-let C4Panel = { orders: [], loading: false, error: null, activeTab: '마켓발주전', checkedIds: new Set() };
+let C4Panel = { orders: [], loading: false, error: null, activeTab: '마켓발주전', checkedIds: new Set(), searchTerm: '' };
 
 // 현재 선택된 플랫폼 (주문 패널 공용)
 let currentPlatform = 'cafe24'; // 'cafe24' | 'toss'
@@ -623,7 +623,7 @@ function switchPlatformTab(id, el) {
   } else if (id === 'cafe24' || id === 'toss') {
     // 토스쇼핑은 카페24 패널을 공용으로 재사용하며 플랫폼만 전환
     currentPlatform = id;
-    C4Panel.orders = []; C4Panel.checkedIds = new Set(); C4Panel.error = null; C4Panel.loading = false;
+    C4Panel.orders = []; C4Panel.checkedIds = new Set(); C4Panel.error = null; C4Panel.loading = false; C4Panel.searchTerm = '';
     C4Panel.activeTab = id === 'toss' ? '결제완료' : '마켓발주전';
     // 토스 전용 사업자가 아닌 경우 선택 초기화 (예: 태실장픽앤샵 → 토스쇼핑 전환 시)
     if (id === 'toss' && C4.bizId && !TOSS_BIZ_IDS.includes(C4.bizId)) C4.bizId = null;
@@ -1659,6 +1659,69 @@ function c4OrderStatus(order) {
   return C4_STATUS_MAP[order.shipping_status] || null;
 }
 function c4FilteredOrders() { return C4Panel.orders.filter(o => c4OrderStatus(o) === C4Panel.activeTab); }
+function c4SearchFilteredOrders() {
+  const tabFiltered = c4FilteredOrders();
+  if (!C4Panel.searchTerm) return tabFiltered;
+  const term = C4Panel.searchTerm.toLowerCase();
+  return tabFiltered.filter(o =>
+    o.items && o.items.some(item => (item.product_name || '').toLowerCase().includes(term))
+  );
+}
+
+// 주문 행 HTML 생성 (renderC4OrderPanel 및 c4FilterBody 공용)
+function c4BuildRowsHtml(orders) {
+  if (!orders.length) return '<div class="empty-state" style="padding:20px 20px"><p>해당 상태의 주문이 없습니다</p></div>';
+  return orders.map(order => {
+    const checked = C4Panel.checkedIds.has(order.order_id);
+    const r = (order.receivers && order.receivers[0]) || {};
+    const item = (order.items && order.items[0]) || {};
+    const date = (order.order_date || '').substring(0, 10);
+    const rName = r.name || r.receiver_name || order.billing_name || '-';
+    const buyerName = order.billing_name || '';
+    const nameDisplay = (buyerName && buyerName !== rName) ? rName + ' (주문자: ' + buyerName + ')' : rName;
+    const qty = item.quantity || '';
+    const extraCnt = (order.items && order.items.length > 1) ? order.items.length - 1 : 0;
+    const pName = (item.product_name || '-') + (qty ? ' x' + qty + '개' : '') + (extraCnt > 0 ? ' (외 ' + extraCnt + '건)' : '');
+    const place = order.order_place_name || '';
+    const oid = order.order_id.replace(/'/g, "\\'");
+    const oidData = order.order_id.replace(/"/g, '&quot;');
+    return '<div class="order-row' + (checked ? ' chk-sel' : '') + '" data-oid="' + oidData + '" onclick="c4RowClick(\'' + oid + '\')">' +
+      '<input type="checkbox" class="o-chk" ' + (checked ? 'checked' : '') + ' onclick="event.stopPropagation()" onchange="c4CheckOrder(\'' + oid + '\',this.checked)">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">' +
+          '<span style="font-size:11px;color:var(--gold);font-family:\'JetBrains Mono\',monospace;flex-shrink:0">' + order.order_id + '</span>' +
+          '<span style="font-size:10px;color:var(--tx3)">' + date + '</span>' +
+          (place ? '<span style="font-size:10px;background:var(--sur3);padding:1px 5px;border-radius:4px;color:var(--tx2)">' + place + '</span>' : '') +
+        '</div>' +
+        '<div style="display:flex;gap:5px;align-items:center;margin-top:2px">' +
+          '<span style="font-size:12px;font-weight:500;flex-shrink:0">' + nameDisplay + '</span>' +
+          '<span style="font-size:11px;color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + pName + '</span>' +
+        '</div>' +
+        (order.tracking_no ? '<div style="margin-top:3px"><span style="font-size:10px;background:var(--gl);color:var(--green);border:1px solid var(--green);border-radius:4px;padding:1px 6px;font-family:\'JetBrains Mono\',monospace">' + (order.courier_name ? order.courier_name + ' · ' : '') + order.tracking_no + '</span></div>' : '') +
+      '</div></div>';
+  }).join('');
+}
+
+// 선택 상태 UI만 갱신 (스크롤/포커스 유지)
+function c4UpdateSelectionUI() {
+  const visible = c4SearchFilteredOrders();
+  const allChecked = visible.length > 0 && visible.every(o => C4Panel.checkedIds.has(o.order_id));
+  const selAll = document.getElementById('c4-sel-all');
+  if (selAll) { selAll.checked = allChecked; selAll.disabled = visible.length === 0; }
+  const selCount = document.getElementById('c4-sel-count');
+  if (selCount) selCount.textContent = C4Panel.checkedIds.size + '건 선택';
+  const confirmBtn = document.getElementById('c4-confirm-btn');
+  if (confirmBtn) {
+    confirmBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg> 발주확인 (' + C4Panel.checkedIds.size + '건)';
+  }
+}
+
+// 검색어 변경 시 body 행만 교체 (검색 input 자체는 건드리지 않음)
+function c4FilterBody() {
+  const body = document.querySelector('#c4-order-panel-body .order-list-body');
+  if (body) body.innerHTML = c4BuildRowsHtml(c4SearchFilteredOrders());
+  c4UpdateSelectionUI();
+}
 
 function renderC4OrderPanel() {
   const panel = document.getElementById('c4-order-panel-body');
@@ -1686,62 +1749,48 @@ function renderC4OrderPanel() {
       tab + '<span class="o-tab-cnt">' + cnt + '</span></button>';
   }).join('');
 
-  const filtered = c4FilteredOrders();
-  const allChecked = filtered.length > 0 && filtered.every(o => C4Panel.checkedIds.has(o.order_id));
-
-  const rowsHtml = filtered.length ? filtered.map(order => {
-    const checked = C4Panel.checkedIds.has(order.order_id);
-    const r = (order.receivers && order.receivers[0]) || {};
-    const item = (order.items && order.items[0]) || {};
-    const date = (order.order_date || '').substring(0, 10);
-    const rName = r.name || r.receiver_name || order.billing_name || '-';
-    const buyerName = order.billing_name || '';
-    const nameDisplay = (buyerName && buyerName !== rName) ? rName + ' (주문자: ' + buyerName + ')' : rName;
-    const qty = item.quantity || '';
-    const extraCnt = (order.items && order.items.length > 1) ? order.items.length - 1 : 0;
-    const pName = (item.product_name || '-') + (qty ? ' x' + qty + '개' : '') + (extraCnt > 0 ? ' (외 ' + extraCnt + '건)' : '');
-    const place = order.order_place_name || '';
-    const oid = order.order_id.replace(/'/g, "\\'");
-    return '<div class="order-row' + (checked ? ' chk-sel' : '') + '" onclick="c4RowClick(\'' + oid + '\')">' +
-      '<input type="checkbox" class="o-chk" ' + (checked ? 'checked' : '') + ' onclick="event.stopPropagation()" onchange="c4CheckOrder(\'' + oid + '\',this.checked)">' +
-      '<div style="flex:1;min-width:0">' +
-        '<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">' +
-          '<span style="font-size:11px;color:var(--gold);font-family:\'JetBrains Mono\',monospace;flex-shrink:0">' + order.order_id + '</span>' +
-          '<span style="font-size:10px;color:var(--tx3)">' + date + '</span>' +
-          (place ? '<span style="font-size:10px;background:var(--sur3);padding:1px 5px;border-radius:4px;color:var(--tx2)">' + place + '</span>' : '') +
-        '</div>' +
-        '<div style="display:flex;gap:5px;align-items:center;margin-top:2px">' +
-          '<span style="font-size:12px;font-weight:500;flex-shrink:0">' + nameDisplay + '</span>' +
-          '<span style="font-size:11px;color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + pName + '</span>' +
-        '</div>' +
-        (order.tracking_no ? '<div style="margin-top:3px"><span style="font-size:10px;background:var(--gl);color:var(--green);border:1px solid var(--green);border-radius:4px;padding:1px 6px;font-family:\'JetBrains Mono\',monospace">' + (order.courier_name ? order.courier_name + ' · ' : '') + order.tracking_no + '</span></div>' : '') +
-      '</div></div>';
-  }).join('') : '<div class="empty-state" style="padding:20px 20px"><p>해당 상태의 주문이 없습니다</p></div>';
+  const visible = c4SearchFilteredOrders();
+  const allChecked = visible.length > 0 && visible.every(o => C4Panel.checkedIds.has(o.order_id));
 
   panel.innerHTML =
     '<div class="order-status-tabs" style="flex-shrink:0">' + tabsHtml + '</div>' +
     '<div class="order-list-hdr">' +
-      '<input type="checkbox" class="o-chk" id="c4-sel-all"' + (allChecked ? ' checked' : '') + (filtered.length ? '' : ' disabled') + ' onchange="c4SelectAll(this.checked)">' +
+      '<input type="checkbox" class="o-chk" id="c4-sel-all"' + (allChecked ? ' checked' : '') + (visible.length ? '' : ' disabled') + ' onchange="c4SelectAll(this.checked)">' +
       '<label for="c4-sel-all" style="cursor:pointer">전체선택</label>' +
-      '<span style="margin-left:auto;font-size:11px;color:var(--tx3)">' + C4Panel.checkedIds.size + '건 선택</span>' +
+      '<input type="text" id="c4-search-input" placeholder="상품명 검색 (예: 날계, 굽계)" value="' + C4Panel.searchTerm.replace(/"/g, '&quot;') + '" oninput="C4Panel.searchTerm=this.value;c4FilterBody()" style="margin-left:8px;flex:1;min-width:0;max-width:200px;background:var(--sur2);border:1px solid var(--bdr);border-radius:5px;padding:3px 8px;font-size:11px;color:var(--tx1);outline:none">' +
+      '<span id="c4-sel-count" style="margin-left:auto;font-size:11px;color:var(--tx3);white-space:nowrap">' + C4Panel.checkedIds.size + '건 선택</span>' +
     '</div>' +
-    '<div class="order-list-body">' + rowsHtml + '</div>' +
-    '<button class="btn btn-gold btn-full" style="margin-top:12px;flex-shrink:0" onclick="c4DoConfirm()">' +
+    '<div class="order-list-body">' + c4BuildRowsHtml(visible) + '</div>' +
+    '<button id="c4-confirm-btn" class="btn btn-gold btn-full" style="margin-top:12px;flex-shrink:0" onclick="c4DoConfirm()">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg>' +
       ' 발주확인 (' + C4Panel.checkedIds.size + '건)</button>';
 }
 
-function c4SetTab(tab) { C4Panel.activeTab = tab; renderC4OrderPanel(); }
+function c4SetTab(tab) { C4Panel.activeTab = tab; C4Panel.searchTerm = ''; renderC4OrderPanel(); }
 function c4RowClick(oid) { c4CheckOrder(oid, !C4Panel.checkedIds.has(oid)); }
 function c4CheckOrder(oid, checked) {
   if (checked) C4Panel.checkedIds.add(oid); else C4Panel.checkedIds.delete(oid);
   c4PrepareOrderData();
-  renderC4OrderPanel();
+  // DOM 직접 토글 — 스크롤 위치 유지
+  const row = document.querySelector('#c4-order-panel-body .order-row[data-oid="' + oid.replace(/"/g, '&quot;') + '"]');
+  if (row) {
+    row.classList.toggle('chk-sel', checked);
+    const cb = row.querySelector('.o-chk');
+    if (cb) cb.checked = checked;
+  }
+  c4UpdateSelectionUI();
 }
 function c4SelectAll(checked) {
-  c4FilteredOrders().forEach(o => checked ? C4Panel.checkedIds.add(o.order_id) : C4Panel.checkedIds.delete(o.order_id));
+  c4SearchFilteredOrders().forEach(o => checked ? C4Panel.checkedIds.add(o.order_id) : C4Panel.checkedIds.delete(o.order_id));
   c4PrepareOrderData();
-  renderC4OrderPanel();
+  // 모든 보이는 row DOM 직접 토글 — 스크롤 위치 유지
+  document.querySelectorAll('#c4-order-panel-body .order-row[data-oid]').forEach(row => {
+    const isChecked = C4Panel.checkedIds.has(row.getAttribute('data-oid'));
+    row.classList.toggle('chk-sel', isChecked);
+    const cb = row.querySelector('.o-chk');
+    if (cb) cb.checked = isChecked;
+  });
+  c4UpdateSelectionUI();
 }
 
 // 체크된 주문들을 C4.orderHeaders / C4.orderData 에 채워넣는 함수
