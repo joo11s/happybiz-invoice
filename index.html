@@ -1361,6 +1361,8 @@ function renderDomeConsignPanel() {
     const item = (order.items || []).find(i => (i.custom_product_code || '').startsWith('도매매 ')) || (order.items && order.items[0]) || {};
     const date = (order.order_date || '').substring(0, 10);
     const rName = r.name || r.receiver_name || order.billing_name || '-';
+    const buyerName = order.billing_name || '';
+    const nameDisplay = (buyerName && buyerName !== rName) ? rName + ' (주문자: ' + buyerName + ')' : rName;
     const domeItems = (order.items || []).filter(i => (i.custom_product_code || '').startsWith('도매매 '));
     const qty = domeItems.reduce((s, i) => s + (parseInt(i.quantity, 10) || 1), 0);
     const pName = (item.product_name || '-') + ' x' + qty + '개';
@@ -1374,7 +1376,7 @@ function renderDomeConsignPanel() {
           '<span style="font-size:10px;color:var(--tx3)">' + date + '</span>' +
         '</div>' +
         '<div style="display:flex;gap:5px;align-items:center;margin-top:2px">' +
-          '<span style="font-size:12px;font-weight:500;flex-shrink:0">' + rName + '</span>' +
+          '<span style="font-size:12px;font-weight:500;flex-shrink:0">' + nameDisplay + '</span>' +
           '<span style="font-size:11px;color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + pName + '</span>' +
         '</div>' +
       '</div>' +
@@ -1591,7 +1593,8 @@ async function domeConsignQueryInvoices() {
       <button class="btn btn-gold btn-full" style="margin-top:12px" onclick="domeConsignDlCsv()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
         카페24 운송장 업로드 CSV 다운로드 (${matched.length}건)
-      </button>` : '';
+      </button>
+      <div style="margin-top:5px;font-size:0.75rem;color:gray;line-height:1.4">자동 반영이 정상 처리된 경우 다운로드 불필요 · 매칭 실패 등 예외 상황에서 카페24에 수동 업로드할 때만 사용</div>` : '';
 
     resultEl.innerHTML = `
       <div class="match-result-box" style="margin-top:10px">
@@ -1691,6 +1694,8 @@ function renderC4OrderPanel() {
     const item = (order.items && order.items[0]) || {};
     const date = (order.order_date || '').substring(0, 10);
     const rName = r.name || r.receiver_name || order.billing_name || '-';
+    const buyerName = order.billing_name || '';
+    const nameDisplay = (buyerName && buyerName !== rName) ? rName + ' (주문자: ' + buyerName + ')' : rName;
     const qty = item.quantity || '';
     const extraCnt = (order.items && order.items.length > 1) ? order.items.length - 1 : 0;
     const pName = (item.product_name || '-') + (qty ? ' x' + qty + '개' : '') + (extraCnt > 0 ? ' (외 ' + extraCnt + '건)' : '');
@@ -1705,7 +1710,7 @@ function renderC4OrderPanel() {
           (place ? '<span style="font-size:10px;background:var(--sur3);padding:1px 5px;border-radius:4px;color:var(--tx2)">' + place + '</span>' : '') +
         '</div>' +
         '<div style="display:flex;gap:5px;align-items:center;margin-top:2px">' +
-          '<span style="font-size:12px;font-weight:500;flex-shrink:0">' + rName + '</span>' +
+          '<span style="font-size:12px;font-weight:500;flex-shrink:0">' + nameDisplay + '</span>' +
           '<span style="font-size:11px;color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + pName + '</span>' +
         '</div>' +
         (order.tracking_no ? '<div style="margin-top:3px"><span style="font-size:10px;background:var(--gl);color:var(--green);border:1px solid var(--green);border-radius:4px;padding:1px 6px;font-family:\'JetBrains Mono\',monospace">' + (order.courier_name ? order.courier_name + ' · ' : '') + order.tracking_no + '</span></div>' : '') +
