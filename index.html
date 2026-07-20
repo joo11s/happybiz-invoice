@@ -1757,7 +1757,7 @@ function renderC4OrderPanel() {
     '<div class="order-list-hdr">' +
       '<input type="checkbox" class="o-chk" id="c4-sel-all"' + (allChecked ? ' checked' : '') + (visible.length ? '' : ' disabled') + ' onchange="c4SelectAll(this.checked)">' +
       '<label for="c4-sel-all" style="cursor:pointer">전체선택</label>' +
-      '<input type="text" id="c4-search-input" placeholder="상품명 검색 (예: 날계, 굽계)" value="' + C4Panel.searchTerm.replace(/"/g, '&quot;') + '" oninput="C4Panel.searchTerm=this.value;c4FilterBody()" style="margin-left:8px;flex:1;min-width:0;max-width:200px;background:var(--sur2);border:1px solid var(--bdr);border-radius:5px;padding:3px 8px;font-size:11px;color:var(--tx1);outline:none">' +
+      '<input type="text" id="c4-search-input" autocomplete="off" placeholder="상품명 검색 (예: 날계, 굽계)" value="' + C4Panel.searchTerm.replace(/"/g, '&quot;') + '" oninput="C4Panel.searchTerm=this.value;c4FilterBody()" style="margin-left:8px;flex:1;min-width:0;max-width:200px;background:var(--sur2);border:1px solid var(--bdr);border-radius:5px;padding:3px 8px;font-size:11px;color:var(--tx1);outline:none">' +
       '<span id="c4-sel-count" style="margin-left:auto;font-size:11px;color:var(--tx3);white-space:nowrap">' + C4Panel.checkedIds.size + '건 선택</span>' +
     '</div>' +
     '<div class="order-list-body">' + c4BuildRowsHtml(visible) + '</div>' +
