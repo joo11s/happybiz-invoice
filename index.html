@@ -1620,7 +1620,7 @@ function domeConsignDlCsv() {
 }
 
 async function fetchC4Orders() {
-  C4Panel.loading = true; C4Panel.error = null; C4Panel.orders = []; C4Panel.checkedIds = new Set();
+  C4Panel.loading = true; C4Panel.error = null; C4Panel.orders = []; C4Panel.checkedIds = new Set(); C4Panel.searchTerm = '';
   renderC4OrderPanel();
   try {
     const bizCode = getBizWebhookCode(C4.bizId);
