@@ -739,7 +739,7 @@ function initDB() {
 
   const lottePreset = {
     id: 'courier-lotte',
-    name: '롯데택배 B타입',
+    name: '롯데글로벌로지스 B타입',
     columns: ['주문번호','보내는사람(지정)','전화번호1(지정)','전화번호2(지정)','우편번호(지정)','주소(지정)','받는사람','전화번호1','전화번호2','우편번호','주소','상품명1','상품상세1','수량(A타입)','배송메시지','운임구분','운임','운송장번호'],
     mapping: {
       order_no: '주문번호',
@@ -764,6 +764,33 @@ function initDB() {
   const lotteIdx = db.couriers.findIndex(c => c.id === 'courier-lotte');
   if (lotteIdx === -1) { db.couriers.push(lottePreset); }
   else { db.couriers[lotteIdx] = lottePreset; }
+  const lotteRealPreset = {
+    id: 'courier-lotte-real',
+    name: '롯데택배',
+    columns: ['주문번호','보내는사람(지정)','전화번호1(지정)','전화번호2(지정)','우편번호(지정)','주소(지정)','받는사람','전화번호1','전화번호2','우편번호','주소','상품명1','상품상세1','수량(A타입)','배송메시지','운임구분','운임','운송장번호'],
+    mapping: {
+      order_no: '주문번호',
+      receiver: '받는사람',
+      phone: '전화번호1',
+      phone2: '전화번호2',
+      zipcode: '우편번호',
+      address: '주소',
+      product_name: '상품명1',
+      product_option: '상품상세1',
+      quantity: '수량(A타입)',
+      memo: '배송메시지',
+      invoice_no: '운송장번호'
+    },
+    fixedValues: {
+      '보내는사람(지정)': '__senderName__',
+      '전화번호1(지정)': '__senderPhone__',
+      '주소(지정)': '__senderAddress__',
+      '운송장번호': ''
+    }
+  };
+  const lotteRealIdx = db.couriers.findIndex(c => c.id === 'courier-lotte-real');
+  if (lotteRealIdx === -1) { db.couriers.push(lotteRealPreset); }
+  else { db.couriers[lotteRealIdx] = lotteRealPreset; }
 
   const hanjinPreset = {
     id: 'courier-hanjin',
@@ -1101,7 +1128,7 @@ function getBizWebhookCode(bizId) {
 }
 
 // 택배사 courierId → 카페24 배송사 코드 매핑
-const COURIER_CODE_MAP = { 'courier-cj': '0006', 'courier-hanjin': '0018', 'courier-lotte': '0079' };
+const COURIER_CODE_MAP = { 'courier-cj': '0006', 'courier-hanjin': '0018', 'courier-lotte': '0079', 'courier-lotte-real': '0019' };
 function getCourierWebhookCode(courierId) {
   if (!courierId) return '0006';
   if (COURIER_CODE_MAP[courierId]) return COURIER_CODE_MAP[courierId];
@@ -1110,6 +1137,7 @@ function getCourierWebhookCode(courierId) {
   const name = courier.name;
   if (name.includes('CJ') || name.includes('대한통운')) return '0006';
   if (name.includes('한진')) return '0018';
+  if (name === '롯데택배') return '0019';
   if (name.includes('롯데')) return '0079';
   return '0006';
 }
