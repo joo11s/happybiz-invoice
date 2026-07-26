@@ -137,6 +137,37 @@ input[type=text]:focus{border-color:var(--gold);}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:3px;}
 
+/* ── 클레임관리 섹션 ── */
+#section-invoice{display:flex;flex-direction:column;height:calc(100vh - 52px);}
+#section-claim{display:none;flex-direction:column;height:calc(100vh - 52px);overflow:hidden;}
+.claim-page{flex:1;overflow-y:auto;padding:24px;}
+.claim-inner{max-width:1100px;margin:0 auto;}
+.claim-top-bar{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+.claim-filter-bar{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;}
+.claim-filter-btn{padding:6px 14px;border-radius:var(--rs);font-size:12px;font-weight:500;cursor:pointer;color:var(--tx2);border:1px solid var(--bdr);background:var(--sur2);font-family:'Noto Sans KR',sans-serif;transition:all .15s;}
+.claim-filter-btn:hover{color:var(--tx);border-color:var(--bdr2);}
+.claim-filter-btn.active{color:var(--gold);background:var(--gold-bg);border-color:var(--gold-bdr);}
+.claim-table-wrap{background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);overflow:hidden;}
+.claim-table{width:100%;border-collapse:collapse;}
+.claim-table th{font-size:11px;font-weight:600;color:var(--tx3);padding:10px 14px;text-align:left;background:var(--sur2);border-bottom:1px solid var(--bdr);white-space:nowrap;}
+.claim-table td{padding:10px 14px;border-bottom:1px solid var(--bdr);font-size:13px;vertical-align:middle;}
+.claim-table tr:last-child td{border-bottom:none;}
+.claim-table tr:hover td{background:var(--sur3);}
+.claim-type-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;}
+.type-반품{background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.3);}
+.type-교환{background:rgba(59,130,246,.12);color:#3b82f6;border:1px solid rgba(59,130,246,.3);}
+.type-취소{background:rgba(153,153,153,.12);color:#999;border:1px solid rgba(153,153,153,.3);}
+.type-환불{background:rgba(245,230,200,.12);color:var(--gold);border:1px solid var(--gold-bdr);}
+.claim-status-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:500;}
+.status-신청{background:var(--bl);color:var(--blue);border:1px solid var(--blb);}
+.status-승인대기{background:rgba(245,158,11,.12);color:#f59e0b;border:1px solid rgba(245,158,11,.3);}
+.status-처리완료{background:var(--gl);color:var(--green);border:1px solid var(--gb);}
+.claim-action-wrap{display:flex;gap:5px;}
+.claim-channel-bar{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px;}
+.claim-channel-btn{padding:5px 12px;border-radius:var(--rs);font-size:12px;font-weight:500;cursor:pointer;color:var(--tx2);border:1px solid var(--bdr);background:none;font-family:'Noto Sans KR',sans-serif;transition:all .15s;}
+.claim-channel-btn:hover{color:var(--tx);}
+.claim-channel-btn.active{color:var(--gold);background:var(--gold-bg);border-color:var(--gold-bdr);}
+
 /* 도매꾹 위탁 dome 토글 */
 .dome-tog-wrap{display:flex;align-items:center;gap:3px;margin-left:6px;flex-shrink:0;padding:2px 6px;border-radius:4px;border:1px solid var(--bdr);background:var(--sur3);}
 .dome-tog-wrap input{accent-color:var(--blue);width:12px;height:12px;cursor:pointer;flex-shrink:0;}
@@ -184,10 +215,19 @@ select.modal-sel option{background:var(--sur2);}
 
 <div class="header">
   <div class="header-left">
-    <div class="header-title"><span>송장</span>변환기</div>
-    <div class="tab-bar" id="main-tab-bar"></div>
+    <div class="header-title"><span>행복</span>비즈</div>
+    <div class="tab-bar" id="app-section-tab-bar">
+      <button class="tab active" id="app-tab-invoice" onclick="switchAppSection('invoice', this)">송장변환기</button>
+      <button class="tab" id="app-tab-claim" onclick="switchAppSection('claim', this)">클레임관리</button>
+    </div>
+    <div id="main-tab-bar-wrap" style="display:flex;align-items:center;margin-left:8px;padding-left:8px;border-left:1px solid var(--bdr);">
+      <div class="tab-bar" id="main-tab-bar"></div>
+    </div>
   </div>
 </div>
+
+<!-- ══ 송장변환기 섹션 래퍼 ══ -->
+<div id="section-invoice">
 
 <!-- 카페24 탭 -->
 <div id="tab-cafe24" class="tab-content active">
@@ -478,6 +518,60 @@ select.modal-sel option{background:var(--sur2);}
     </div>
   </div>
 </div>
+
+</div><!-- /section-invoice -->
+
+<!-- ══ 클레임관리 섹션 ══ -->
+<div id="section-claim">
+  <div class="claim-page">
+    <div class="claim-inner">
+
+      <!-- 사업자 선택 + 채널 탭 -->
+      <div class="claim-top-bar">
+        <select class="biz-select" id="claim-biz-sel" style="max-width:220px" onchange="onClaimBizChange()">
+          <option value="">사업자 선택...</option>
+        </select>
+      </div>
+
+      <div class="claim-channel-bar" id="claim-channel-bar">
+        <button class="claim-channel-btn active" data-channel="카페24" onclick="onClaimChannelChange(this)">카페24</button>
+        <button class="claim-channel-btn" data-channel="토스쇼핑" onclick="onClaimChannelChange(this)">토스쇼핑</button>
+        <button class="claim-channel-btn" data-channel="도매꾹(위탁)" onclick="onClaimChannelChange(this)">도매꾹(위탁)</button>
+        <button class="claim-channel-btn" data-channel="도매꾹(공급)" onclick="onClaimChannelChange(this)">도매꾹(공급)</button>
+        <button class="claim-channel-btn" data-channel="온채널" onclick="onClaimChannelChange(this)">온채널</button>
+        <button class="claim-channel-btn" data-channel="우체국쇼핑" onclick="onClaimChannelChange(this)">우체국쇼핑</button>
+      </div>
+
+      <!-- 유형 필터 -->
+      <div class="claim-filter-bar">
+        <button class="claim-filter-btn active" data-filter="전체" onclick="onClaimFilterChange(this)">전체</button>
+        <button class="claim-filter-btn" data-filter="반품" onclick="onClaimFilterChange(this)">반품</button>
+        <button class="claim-filter-btn" data-filter="교환" onclick="onClaimFilterChange(this)">교환</button>
+        <button class="claim-filter-btn" data-filter="취소" onclick="onClaimFilterChange(this)">취소</button>
+        <button class="claim-filter-btn" data-filter="환불" onclick="onClaimFilterChange(this)">환불</button>
+      </div>
+
+      <!-- 클레임 목록 테이블 -->
+      <div class="claim-table-wrap">
+        <table class="claim-table">
+          <thead>
+            <tr>
+              <th>신청일</th>
+              <th>유형</th>
+              <th>주문번호</th>
+              <th>상품명</th>
+              <th>사유</th>
+              <th>상태</th>
+              <th>액션</th>
+            </tr>
+          </thead>
+          <tbody id="claim-table-body"></tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+</div><!-- /section-claim -->
 
 <!-- 모달: 사업자 추가 -->
 <div class="modal-ov" id="m-add-biz">
@@ -2268,6 +2362,137 @@ function toast(msg, type = '') {
 
 // 초기화
 renderCafe24();
+
+// ══════════════════════════════════════════════════
+// 앱 섹션 전환 (송장변환기 / 클레임관리)
+// ══════════════════════════════════════════════════
+let currentAppSection = 'invoice';
+
+function switchAppSection(section, el) {
+  currentAppSection = section;
+  // 앱 탭 버튼 활성화
+  document.querySelectorAll('#app-section-tab-bar .tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+
+  if (section === 'invoice') {
+    document.getElementById('section-invoice').style.display = 'flex';
+    document.getElementById('section-claim').style.display = 'none';
+    document.getElementById('main-tab-bar-wrap').style.display = 'flex';
+  } else if (section === 'claim') {
+    document.getElementById('section-invoice').style.display = 'none';
+    document.getElementById('section-claim').style.display = 'flex';
+    document.getElementById('main-tab-bar-wrap').style.display = 'none';
+    renderClaimBizSelect();
+    renderClaimTable();
+  }
+}
+
+// ══════════════════════════════════════════════════
+// 클레임관리 상태
+// ══════════════════════════════════════════════════
+let claimState = {
+  bizId: null,
+  channel: '카페24',
+  filter: '전체'
+};
+
+// 사업자 선택 드롭다운 렌더링
+function renderClaimBizSelect() {
+  const sel = document.getElementById('claim-biz-sel');
+  const businesses = (typeof DB !== 'undefined' && DB.businesses) ? DB.businesses : [];
+  sel.innerHTML = '<option value="">사업자 선택...</option>';
+  businesses.forEach(b => {
+    const opt = document.createElement('option');
+    opt.value = b.id;
+    opt.textContent = b.name;
+    if (claimState.bizId === b.id) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function onClaimBizChange() {
+  claimState.bizId = document.getElementById('claim-biz-sel').value || null;
+  renderClaimTable();
+}
+
+function onClaimChannelChange(btn) {
+  document.querySelectorAll('.claim-channel-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  claimState.channel = btn.dataset.channel;
+  renderClaimTable();
+}
+
+function onClaimFilterChange(btn) {
+  document.querySelectorAll('.claim-filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  claimState.filter = btn.dataset.filter;
+  renderClaimTable();
+}
+
+// ══════════════════════════════════════════════════
+// fetchClaimData: 실제 API 연동 시 이 함수만 교체
+// bizType: string (사업자 ID), channel: string
+// 현재는 mock 데이터 반환
+// ══════════════════════════════════════════════════
+async function fetchClaimData(bizType, channel) {
+  // TODO: 실제 API 연동 시 아래 mock 데이터를 API 호출로 교체
+  // 예: const res = await fetch(`/api/claims?biz=${bizType}&channel=${channel}`);
+  //     return await res.json();
+
+  const mockData = [
+    { id: 1, date: '2026-07-20', type: '반품', orderNo: 'ORD-20260720-001', product: '여름 원피스', reason: '사이즈 불량', status: '신청' },
+    { id: 2, date: '2026-07-21', type: '교환', orderNo: 'ORD-20260721-002', product: '린넨 셔츠', reason: '색상 다름', status: '승인대기' },
+    { id: 3, date: '2026-07-22', type: '취소', orderNo: 'ORD-20260722-003', product: '청바지', reason: '단순 변심', status: '처리완료' },
+    { id: 4, date: '2026-07-23', type: '환불', orderNo: 'ORD-20260723-004', product: '니트 가디건', reason: '배송 지연', status: '승인대기' },
+    { id: 5, date: '2026-07-24', type: '반품', orderNo: 'ORD-20260724-005', product: '스니커즈', reason: '제품 하자', status: '신청' },
+    { id: 6, date: '2026-07-24', type: '교환', orderNo: 'ORD-20260724-006', product: '슬랙스', reason: '사이즈 교환', status: '처리완료' },
+    { id: 7, date: '2026-07-25', type: '취소', orderNo: 'ORD-20260725-007', product: '맨투맨 티셔츠', reason: '주문 실수', status: '신청' },
+    { id: 8, date: '2026-07-25', type: '환불', orderNo: 'ORD-20260725-008', product: '레이어드 스커트', reason: '상품 불량', status: '승인대기' },
+  ];
+  return mockData;
+}
+
+async function renderClaimTable() {
+  const tbody = document.getElementById('claim-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--tx3)">불러오는 중...</td></tr>';
+
+  const data = await fetchClaimData(claimState.bizId, claimState.channel);
+  const filtered = claimState.filter === '전체' ? data : data.filter(r => r.type === claimState.filter);
+
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--tx3)">클레임 내역이 없습니다.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(row => {
+    const typeCls = 'claim-type-badge type-' + row.type;
+    const statusCls = 'claim-status-badge status-' + row.status;
+    const isCompleted = row.status === '처리완료';
+    const actionHtml = isCompleted
+      ? '<span style="font-size:11px;color:var(--tx3)">처리완료</span>'
+      : `<div class="claim-action-wrap">
+          <button class="btn btn-sm btn-green" onclick="handleClaimAction(${row.id}, 'approve')">승인</button>
+          <button class="btn btn-sm btn-danger" onclick="handleClaimAction(${row.id}, 'reject')">거부</button>
+        </div>`;
+
+    return `<tr>
+      <td style="color:var(--tx2);font-size:12px;white-space:nowrap">${row.date}</td>
+      <td><span class="${typeCls}">${row.type}</span></td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--tx2)">${row.orderNo}</td>
+      <td>${row.product}</td>
+      <td style="color:var(--tx2);font-size:12px">${row.reason}</td>
+      <td><span class="${statusCls}">${row.status}</span></td>
+      <td>${actionHtml}</td>
+    </tr>`;
+  }).join('');
+}
+
+function handleClaimAction(id, action) {
+  const label = action === 'approve' ? '승인' : '거부';
+  toast(`클레임 #${id} ${label} 처리되었습니다`, action === 'approve' ? 'ok' : 'err');
+  // TODO: 실제 API 연동 시 여기에 PATCH/POST 요청 추가
+}
 </script>
 </body>
 </html>
