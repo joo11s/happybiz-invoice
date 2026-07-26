@@ -168,6 +168,32 @@ input[type=text]:focus{border-color:var(--gold);}
 .claim-channel-btn:hover{color:var(--tx);}
 .claim-channel-btn.active{color:var(--gold);background:var(--gold-bg);border-color:var(--gold-bdr);}
 
+/* 클레임관리 서브헤더 */
+.claim-subheader{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--bdr);}
+.claim-subheader-left{display:flex;align-items:center;gap:10px;}
+.claim-subheader-title{font-size:14px;font-weight:700;color:var(--tx);}
+.badge-amber{background:rgba(245,158,11,.12);color:#f59e0b;border:1px solid rgba(245,158,11,.3);}
+
+/* 클레임 유형별 요약카드 */
+.claim-summary-cards{display:flex;gap:10px;margin-bottom:16px;overflow-x:auto;padding-bottom:4px;}
+.claim-summary-cards::-webkit-scrollbar{height:4px;}
+.claim-summary-cards::-webkit-scrollbar-thumb{background:var(--bdr);border-radius:2px;}
+.claim-sum-card{flex-shrink:0;background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);padding:12px 16px;min-width:112px;cursor:pointer;transition:border-color .15s;}
+.claim-sum-card:hover,.claim-sum-card.active{border-color:var(--gold-bdr);}
+.claim-sum-card.active{background:var(--gold-bg);}
+.claim-sum-label{font-size:11px;color:var(--tx3);margin-bottom:8px;}
+.claim-sum-count{font-size:22px;font-weight:700;color:var(--gold);line-height:1;margin-bottom:6px;}
+.claim-sum-sub{padding-top:6px;border-top:1px solid var(--bdr);font-size:10px;color:var(--tx3);}
+.claim-sum-sub em{font-style:normal;color:#f59e0b;}
+
+/* 처리완료 배지 (CS통합관리 btn-done 스타일 통일) */
+.claim-done-badge{display:inline-flex;align-items:center;padding:4px 10px;border-radius:7px;font-size:10px;font-weight:600;color:var(--green);background:var(--gl);border:1px solid var(--gb);}
+
+/* 액션 버튼 스타일 개선 */
+.claim-action-wrap .btn{border-radius:8px;transition:all .15s;}
+.claim-action-wrap .btn-green:hover{background:#16a34a;box-shadow:0 2px 8px rgba(34,197,94,.25);}
+.claim-action-wrap .btn-danger:hover{opacity:.8;}
+
 /* 도매꾹 위탁 dome 토글 */
 .dome-tog-wrap{display:flex;align-items:center;gap:3px;margin-left:6px;flex-shrink:0;padding:2px 6px;border-radius:4px;border:1px solid var(--bdr);background:var(--sur3);}
 .dome-tog-wrap input{accent-color:var(--blue);width:12px;height:12px;cursor:pointer;flex-shrink:0;}
@@ -526,6 +552,20 @@ select.modal-sel option{background:var(--sur2);}
   <div class="claim-page">
     <div class="claim-inner">
 
+      <!-- 서브헤더 -->
+      <div class="claim-subheader">
+        <div class="claim-subheader-left">
+          <span class="claim-subheader-title">클레임관리</span>
+          <span class="badge badge-amber" id="claim-pending-badge" style="display:none">처리대기 0건</span>
+        </div>
+        <span class="badge badge-gray">Mock 데이터 · API 연동 예정</span>
+      </div>
+
+      <!-- 유형별 요약카드 -->
+      <div class="claim-summary-cards" id="claim-summary-cards">
+        <!-- JS로 렌더링 -->
+      </div>
+
       <!-- 사업자 선택 + 채널 탭 -->
       <div class="claim-top-bar">
         <select class="biz-select" id="claim-biz-sel" style="max-width:220px" onchange="onClaimBizChange()">
@@ -542,7 +582,7 @@ select.modal-sel option{background:var(--sur2);}
         <button class="claim-channel-btn" data-channel="우체국쇼핑" onclick="onClaimChannelChange(this)">우체국쇼핑</button>
       </div>
 
-      <!-- 유형 필터 -->
+      <!-- 유형 필터 (요약카드와 연동) -->
       <div class="claim-filter-bar">
         <button class="claim-filter-btn active" data-filter="전체" onclick="onClaimFilterChange(this)">전체</button>
         <button class="claim-filter-btn" data-filter="반품" onclick="onClaimFilterChange(this)">반품</button>
@@ -562,7 +602,7 @@ select.modal-sel option{background:var(--sur2);}
               <th>상품명</th>
               <th>사유</th>
               <th>상태</th>
-              <th>액션</th>
+              <th style="text-align:right">액션</th>
             </tr>
           </thead>
           <tbody id="claim-table-body"></tbody>
@@ -2426,7 +2466,46 @@ function onClaimFilterChange(btn) {
   document.querySelectorAll('.claim-filter-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   claimState.filter = btn.dataset.filter;
+  // 요약카드 active 동기화
+  document.querySelectorAll('.claim-sum-card').forEach(c => c.classList.toggle('active', c.dataset.type === claimState.filter));
   renderClaimTable();
+}
+
+function onClaimSummaryCardClick(type) {
+  claimState.filter = type;
+  // 카드 active
+  document.querySelectorAll('.claim-sum-card').forEach(c => c.classList.toggle('active', c.dataset.type === type));
+  // 필터 버튼 active
+  document.querySelectorAll('.claim-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === type));
+  renderClaimTable();
+}
+
+function renderClaimSummaryCards(allData) {
+  const container = document.getElementById('claim-summary-cards');
+  if (!container) return;
+
+  const types = ['전체', '반품', '교환', '취소', '환불'];
+  const cards = types.map(type => {
+    const items = type === '전체' ? allData : allData.filter(r => r.type === type);
+    const total = items.length;
+    const pending = items.filter(r => r.status === '승인대기').length;
+    const isActive = claimState.filter === type;
+    return `
+      <div class="claim-sum-card${isActive ? ' active' : ''}" data-type="${type}" onclick="onClaimSummaryCardClick('${type}')">
+        <div class="claim-sum-label">${type}</div>
+        <div class="claim-sum-count">${total}건</div>
+        <div class="claim-sum-sub">승인대기 <em>${pending}건</em></div>
+      </div>`;
+  });
+  container.innerHTML = cards.join('');
+
+  // 처리대기 배지 업데이트
+  const totalPending = allData.filter(r => r.status === '승인대기').length;
+  const badge = document.getElementById('claim-pending-badge');
+  if (badge) {
+    badge.textContent = `처리대기 ${totalPending}건`;
+    badge.style.display = totalPending > 0 ? '' : 'none';
+  }
 }
 
 // ══════════════════════════════════════════════════
@@ -2458,6 +2537,10 @@ async function renderClaimTable() {
   tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--tx3)">불러오는 중...</td></tr>';
 
   const data = await fetchClaimData(claimState.bizId, claimState.channel);
+
+  // 요약카드 + 처리대기 배지를 전체 데이터 기준으로 업데이트
+  renderClaimSummaryCards(data);
+
   const filtered = claimState.filter === '전체' ? data : data.filter(r => r.type === claimState.filter);
 
   if (!filtered.length) {
@@ -2470,7 +2553,7 @@ async function renderClaimTable() {
     const statusCls = 'claim-status-badge status-' + row.status;
     const isCompleted = row.status === '처리완료';
     const actionHtml = isCompleted
-      ? '<span style="font-size:11px;color:var(--tx3)">처리완료</span>'
+      ? '<span class="claim-done-badge">✓ 완료</span>'
       : `<div class="claim-action-wrap">
           <button class="btn btn-sm btn-green" onclick="handleClaimAction(${row.id}, 'approve')">승인</button>
           <button class="btn btn-sm btn-danger" onclick="handleClaimAction(${row.id}, 'reject')">거부</button>
@@ -2483,7 +2566,7 @@ async function renderClaimTable() {
       <td>${row.product}</td>
       <td style="color:var(--tx2);font-size:12px">${row.reason}</td>
       <td><span class="${statusCls}">${row.status}</span></td>
-      <td>${actionHtml}</td>
+      <td style="text-align:right">${actionHtml}</td>
     </tr>`;
   }).join('');
 }
