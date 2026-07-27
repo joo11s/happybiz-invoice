@@ -2506,11 +2506,14 @@ async function claimRefreshAll() {
 
     // refund-list 호출
     try {
-      const rres = await fetch(`${N8N_BASE}/soulkit-${biz}-refund-list`);
+      const endDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10).replace(/-/g, '');
+      const rres = await fetch(`${N8N_BASE}/soulkit-${biz}-refund-list?start_date=${startDate}&end_date=${endDate}&limit=500`);
       let rdata = [];
       try { rdata = await rres.json(); } catch(_) {}
       if (!Array.isArray(rdata)) rdata = rdata ? [rdata] : [];
-      claimState.refunds = rdata;
+      // 응답 구조: [{refunds:[...]}] — 배열 첫 번째 요소의 refunds 필드 추출
+      claimState.refunds = (rdata.length > 0 && Array.isArray(rdata[0].refunds)) ? rdata[0].refunds : rdata;
     } catch(_) { claimState.refunds = []; }
 
     if (statusEl) statusEl.textContent = `${claimState.claims.length}건 조회됨`;
