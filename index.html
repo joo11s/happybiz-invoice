@@ -222,10 +222,10 @@ select.modal-sel option{background:var(--sur2);}
 
 /* 주문 상태 탭 */
 .order-status-tabs{display:flex;border-bottom:1px solid var(--bdr);overflow-x:auto;flex-shrink:0;}
-.order-status-tab{padding:8px 10px;font-size:11px;font-weight:500;cursor:pointer;color:var(--tx2);border:none;background:none;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;font-family:'Noto Sans KR',sans-serif;}
+.order-status-tab{padding:8px 10px;font-size:13px;font-weight:600;cursor:pointer;color:#bbb;border:none;background:none;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;font-family:'Noto Sans KR',sans-serif;}
 .order-status-tab:hover{color:var(--tx);}
 .order-status-tab.active{color:var(--gold);border-bottom-color:var(--gold);}
-.o-tab-cnt{font-size:10px;background:var(--sur3);border-radius:8px;padding:1px 5px;margin-left:3px;color:var(--tx3);}
+.o-tab-cnt{font-size:11px;background:var(--sur3);border-radius:8px;padding:1px 5px;margin-left:3px;color:#aaa;}
 .order-status-tab.active .o-tab-cnt{background:var(--gold-bg);color:var(--gold);}
 
 /* 주문 리스트 */
@@ -588,12 +588,12 @@ select.modal-sel option{background:var(--sur2);}
 
       <!-- 테이블 헤더 -->
       <div id="claim-table-header" style="display:grid;grid-template-columns:140px 130px 1fr 160px 110px 120px;gap:0;padding:7px 14px;background:var(--sur2);border-bottom:1px solid var(--bdr);flex-shrink:0;">
-        <div style="font-size:11px;color:var(--tx3);font-weight:500;">주문번호</div>
-        <div style="font-size:11px;color:var(--tx3);font-weight:500;">클레임코드</div>
-        <div style="font-size:11px;color:var(--tx3);font-weight:500;">상품명</div>
-        <div style="font-size:11px;color:var(--tx3);font-weight:500;">사유</div>
-        <div style="font-size:11px;color:var(--tx3);font-weight:500;">상태</div>
-        <div style="font-size:11px;color:var(--tx3);font-weight:500;">액션</div>
+        <div style="font-size:12px;color:#bbb;font-weight:600;">주문번호</div>
+        <div style="font-size:12px;color:#bbb;font-weight:600;">클레임코드</div>
+        <div id="claim-header-col3" style="font-size:12px;color:#bbb;font-weight:600;">상품명</div>
+        <div style="font-size:12px;color:#bbb;font-weight:600;">사유</div>
+        <div style="font-size:12px;color:#bbb;font-weight:600;">상태</div>
+        <div style="font-size:12px;color:#bbb;font-weight:600;">액션</div>
       </div>
 
       <!-- 테이블 바디 -->
@@ -2577,6 +2577,13 @@ function renderClaimListBody() {
   const el = document.getElementById('claim-list-body');
   if (!el) return;
 
+  const isRefundTab = claimState.activeType === 'refund';
+  const isExchangeTab = claimState.activeType === 'exchange';
+
+  // 환불 탭일 때 3번째 컬럼 헤더를 "환불금액"으로 변경
+  const col3Header = document.getElementById('claim-header-col3');
+  if (col3Header) col3Header.textContent = isRefundTab ? '환불금액' : '상품명';
+
   if (claimState.loading) {
     el.innerHTML = '<div class="empty-state" style="padding:60px 20px"><p>불러오는 중...</p></div>';
     return;
@@ -2593,15 +2600,34 @@ function renderClaimListBody() {
     return;
   }
 
-  const isRefundTab = claimState.activeType === 'refund';
-  const isExchangeTab = claimState.activeType === 'exchange';
-
   el.innerHTML = items.map((c, idx) => {
     const orderId = escHtml(c.order_id || c.orderId || '-');
-    const claimCode = escHtml(c.claim_code || c.claimCode || '-');
-    const productName = escHtml(c.product_name || c.productName || '-');
-    const reason = escHtml(c.claim_reason || c.reason || '-');
-    const statusText = c.status_text || c.statusText || c.order_status || '-';
+
+    let claimCode, col3Val, reason, statusBadgeHtml;
+
+    if (isRefundTab) {
+      // 환불 탭: 전용 필드명 사용
+      claimCode = escHtml(c.refund_code || '-');
+      const refundAmt = c.actual_refund_amount != null ? Number(c.actual_refund_amount).toLocaleString('ko-KR') + '원' : '-';
+      col3Val = `<span style="font-family:'JetBrains Mono',monospace;color:var(--gold);">${escHtml(refundAmt)}</span>`;
+      reason = escHtml(c.refund_reason || '-');
+      // 환불 상태: T → 환불완료(green), F → 환불전(amber)
+      const refundStatus = c.refund_status || '';
+      if (refundStatus === 'T') {
+        statusBadgeHtml = `<span class="badge badge-green">환불완료</span>`;
+      } else if (refundStatus === 'F') {
+        statusBadgeHtml = `<span class="badge" style="background:rgba(245,158,11,.12);color:#f59e0b;border:1px solid rgba(245,158,11,.3);">환불전</span>`;
+      } else {
+        statusBadgeHtml = `<span class="badge badge-gray">${escHtml(refundStatus) || '-'}</span>`;
+      }
+    } else {
+      claimCode = escHtml(c.claim_code || c.claimCode || '-');
+      col3Val = escHtml(c.product_name || c.productName || '-');
+      reason = escHtml(c.claim_reason || c.reason || '-');
+      const statusText = c.status_text || c.statusText || c.order_status || '-';
+      statusBadgeHtml = claimStatusBadge(statusText);
+    }
+
     const isSelected = claimState.selectedItem && claimState.selectedItem._idx === idx;
 
     let actionHtml = '';
@@ -2622,12 +2648,12 @@ function renderClaimListBody() {
       onmouseout="this.style.background='${isSelected ? 'var(--gold-bg)' : 'transparent'}'"
       data-sel="${isSelected ? '1' : ''}"
       onclick="claimRowClick(${idx})">
-      <div style="font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;">${orderId}</div>
-      <div style="font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--gold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;">${claimCode}</div>
-      <div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;">${productName}</div>
-      <div style="font-size:11px;color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;">${reason}</div>
-      <div style="font-size:11px;">${claimStatusBadge(statusText)}</div>
-      <div style="font-size:11px;">${actionHtml}</div>
+      <div style="font-size:13px;font-family:'JetBrains Mono',monospace;color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;">${orderId}</div>
+      <div style="font-size:13px;font-family:'JetBrains Mono',monospace;color:var(--gold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;">${claimCode}</div>
+      <div style="font-size:13px;color:#ddd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;">${col3Val}</div>
+      <div style="font-size:12px;color:#bbb;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;">${reason}</div>
+      <div style="font-size:12px;">${statusBadgeHtml}</div>
+      <div style="font-size:12px;">${actionHtml}</div>
     </div>`;
   }).join('');
 }
