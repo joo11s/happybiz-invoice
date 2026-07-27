@@ -587,8 +587,9 @@ select.modal-sel option{background:var(--sur2);}
       </div>
 
       <!-- 테이블 헤더 -->
-      <div id="claim-table-header" style="display:grid;grid-template-columns:140px 130px 1fr 160px 110px 120px;gap:0;padding:7px 14px;background:var(--sur2);border-bottom:1px solid var(--bdr);flex-shrink:0;">
+      <div id="claim-table-header" style="display:grid;grid-template-columns:140px 100px 130px 1fr 160px 110px 120px;gap:0;padding:7px 14px;background:var(--sur2);border-bottom:1px solid var(--bdr);flex-shrink:0;">
         <div style="font-size:12px;color:#bbb;font-weight:600;">주문번호</div>
+        <div id="claim-header-date" style="font-size:12px;color:#bbb;font-weight:600;">신청일</div>
         <div style="font-size:12px;color:#bbb;font-weight:600;">클레임코드</div>
         <div id="claim-header-col3" style="font-size:12px;color:#bbb;font-weight:600;">상품명</div>
         <div style="font-size:12px;color:#bbb;font-weight:600;">사유</div>
@@ -2583,6 +2584,9 @@ function renderClaimListBody() {
   // 환불 탭일 때 3번째 컬럼 헤더를 "환불금액"으로 변경
   const col3Header = document.getElementById('claim-header-col3');
   if (col3Header) col3Header.textContent = isRefundTab ? '환불금액' : '상품명';
+  // 환불 탭일 때 날짜 컬럼 헤더를 "환불완료일"로 변경
+  const dateHeader = document.getElementById('claim-header-date');
+  if (dateHeader) dateHeader.textContent = isRefundTab ? '환불완료일' : '신청일';
 
   if (claimState.loading) {
     el.innerHTML = '<div class="empty-state" style="padding:60px 20px"><p>불러오는 중...</p></div>';
@@ -2603,7 +2607,7 @@ function renderClaimListBody() {
   el.innerHTML = items.map((c, idx) => {
     const orderId = escHtml(c.order_id || c.orderId || '-');
 
-    let claimCode, col3Val, reason, statusBadgeHtml;
+    let claimCode, col3Val, reason, statusBadgeHtml, dateVal;
 
     if (isRefundTab) {
       // 환불 탭: 전용 필드명 사용
@@ -2611,6 +2615,8 @@ function renderClaimListBody() {
       const refundAmt = c.actual_refund_amount != null ? Number(c.actual_refund_amount).toLocaleString('ko-KR') + '원' : '-';
       col3Val = `<span style="font-family:'JetBrains Mono',monospace;color:var(--gold);">${escHtml(refundAmt)}</span>`;
       reason = escHtml(c.refund_reason || '-');
+      // 환불완료일
+      dateVal = escHtml(c.refund_date ? String(c.refund_date).slice(0, 10) : '-');
       // 환불 상태: T → 환불완료(green), F → 환불전(amber)
       const refundStatus = c.refund_status || c.status || '';
       if (refundStatus === 'T') {
@@ -2626,6 +2632,8 @@ function renderClaimListBody() {
       reason = escHtml(c.claim_reason || c.reason || '-');
       const statusText = c.status_text || c.statusText || c.order_status || '-';
       statusBadgeHtml = claimStatusBadge(statusText);
+      // 신청일
+      dateVal = escHtml(c.claim_date ? String(c.claim_date).slice(0, 10) : '-');
     }
 
     const isSelected = claimState.selectedItem && claimState.selectedItem._idx === idx;
@@ -2643,12 +2651,13 @@ function renderClaimListBody() {
     }
 
     const bg = isSelected ? 'var(--gold-bg)' : 'transparent';
-    return `<div style="display:grid;grid-template-columns:140px 130px 1fr 160px 110px 120px;gap:0;padding:9px 14px;border-bottom:1px solid var(--bdr);cursor:pointer;transition:background .1s;background:${bg};"
+    return `<div style="display:grid;grid-template-columns:140px 100px 130px 1fr 160px 110px 120px;gap:0;padding:9px 14px;border-bottom:1px solid var(--bdr);cursor:pointer;transition:background .1s;background:${bg};"
       onmouseover="if(!(this.dataset.sel==='1'))this.style.background='var(--sur3)'"
       onmouseout="this.style.background='${isSelected ? 'var(--gold-bg)' : 'transparent'}'"
       data-sel="${isSelected ? '1' : ''}"
       onclick="claimRowClick(${idx})">
       <div style="font-size:13px;font-family:'JetBrains Mono',monospace;color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;">${orderId}</div>
+      <div style="font-size:12px;color:#bbb;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;">${dateVal}</div>
       <div style="font-size:13px;font-family:'JetBrains Mono',monospace;color:var(--gold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;">${claimCode}</div>
       <div style="font-size:13px;color:#ddd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;">${col3Val}</div>
       <div style="font-size:12px;color:#bbb;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;">${reason}</div>
