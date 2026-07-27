@@ -2773,17 +2773,73 @@ function renderClaimDetailPanel(item, detail, errMsg) {
   if (errMsg) {
     detailRows = `<div style="padding:10px;background:var(--rl);border:1px solid var(--rb);border-radius:var(--rs);font-size:12px;color:var(--red);margin-top:12px;">${escHtml(errMsg)}</div>`;
   } else if (detail) {
+    const type = claimState.activeType;
     const detailItems = Array.isArray(detail) ? detail : [detail];
     detailItems.forEach(d => {
-      detailRows += `<div style="background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--rs);padding:12px;margin-top:10px;">`;
-      Object.entries(d).forEach(([k, v]) => {
-        if (k.startsWith('_')) return;
-        detailRows += `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--bdr);font-size:12px;">
-          <span style="color:var(--tx3);flex-shrink:0;padding-right:10px;">${escHtml(k)}</span>
-          <span style="color:var(--tx);text-align:right;word-break:break-all;">${escHtml(String(v ?? ''))}</span>
-        </div>`;
-      });
-      detailRows += '</div>';
+      if (type === 'cancellation' || type === 'return') {
+        // Unwrap nested cancellation/return object
+        const inner = (type === 'cancellation' && d.cancellation && typeof d.cancellation === 'object')
+          ? d.cancellation
+          : (type === 'return' && d.return && typeof d.return === 'object')
+          ? d.return
+          : d;
+
+        const mkRow = (label, val) => val != null && val !== ''
+          ? `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--bdr);font-size:12px;"><span style="color:var(--tx3);flex-shrink:0;padding-right:10px;">${label}</span><span style="color:var(--tx);text-align:right;word-break:break-all;">${val}</span></div>`
+          : '';
+
+        // 환불방식
+        let refundMethodsStr = '';
+        if (inner.refund_methods != null) {
+          refundMethodsStr = Array.isArray(inner.refund_methods)
+            ? inner.refund_methods.map(m => escHtml(String(m))).join(', ')
+            : escHtml(String(inner.refund_methods));
+        }
+
+        // 환불금액 (배열의 각 항목이 {payment_method, amount})
+        let refundAmountsStr = '';
+        if (Array.isArray(inner.refund_amounts) && inner.refund_amounts.length) {
+          refundAmountsStr = inner.refund_amounts
+            .map(a => escHtml(String(a.payment_method || '')) + ' ' + Number(a.amount || 0).toLocaleString('ko-KR') + '원')
+            .join(', ');
+        }
+
+        // 상품구매금액
+        const orderPriceStr = inner.order_price_amount != null
+          ? escHtml(Number(inner.order_price_amount).toLocaleString('ko-KR') + '원') : '';
+
+        // 배송비
+        const shippingFeeStr = inner.shipping_fee != null
+          ? escHtml(Number(inner.shipping_fee).toLocaleString('ko-KR') + '원') : '';
+
+        // 취소수수료 (있을 때만)
+        const cancelFeeStr = inner.cancel_fee_amount != null
+          ? escHtml(Number(inner.cancel_fee_amount).toLocaleString('ko-KR') + '원') : '';
+
+        // 철회여부
+        const undoneStr = inner.undone === 'T' ? '철회함' : inner.undone === 'F' ? '철회안함' : '';
+
+        detailRows += `<div style="background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--rs);padding:12px;margin-top:10px;">`;
+        detailRows += mkRow('환불방식', refundMethodsStr);
+        detailRows += mkRow('환불금액', refundAmountsStr);
+        detailRows += mkRow('상품구매금액', orderPriceStr);
+        detailRows += mkRow('배송비', shippingFeeStr);
+        detailRows += mkRow('취소수수료', cancelFeeStr);
+        detailRows += mkRow('철회여부', escHtml(undoneStr));
+        detailRows += '</div>';
+      } else {
+        // Generic fallback for exchange and other types
+        detailRows += `<div style="background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--rs);padding:12px;margin-top:10px;">`;
+        Object.entries(d).forEach(([k, v]) => {
+          if (k.startsWith('_')) return;
+          const displayVal = v !== null && typeof v === 'object' ? JSON.stringify(v) : String(v ?? '');
+          detailRows += `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--bdr);font-size:12px;">
+            <span style="color:var(--tx3);flex-shrink:0;padding-right:10px;">${escHtml(k)}</span>
+            <span style="color:var(--tx);text-align:right;word-break:break-all;">${escHtml(displayVal)}</span>
+          </div>`;
+        });
+        detailRows += '</div>';
+      }
     });
   }
 
