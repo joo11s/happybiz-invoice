@@ -2612,7 +2612,7 @@ function renderClaimListBody() {
       col3Val = `<span style="font-family:'JetBrains Mono',monospace;color:var(--gold);">${escHtml(refundAmt)}</span>`;
       reason = escHtml(c.refund_reason || '-');
       // 환불 상태: T → 환불완료(green), F → 환불전(amber)
-      const refundStatus = c.refund_status || '';
+      const refundStatus = c.refund_status || c.status || '';
       if (refundStatus === 'T') {
         statusBadgeHtml = `<span class="badge badge-green">환불완료</span>`;
       } else if (refundStatus === 'F') {
@@ -2670,7 +2670,18 @@ async function claimRowClick(idx) {
   renderClaimListBody(); // 하이라이트
 
   if (claimState.activeType === 'refund') {
-    renderClaimDetailPanel(item, null);
+    const detailPanel = document.getElementById('claim-detail-panel');
+    if (detailPanel) detailPanel.innerHTML = '<div style="padding:20px;font-size:13px;color:var(--tx2);">조회 중...</div>';
+    const biz = claimState.biz;
+    const refundCode = item.refund_code || '';
+    try {
+      const res = await fetch(`${N8N_BASE}/soulkit-${biz}-refund-detail?refund_code=${encodeURIComponent(refundCode)}`);
+      let detail = null;
+      try { detail = await res.json(); } catch(_) {}
+      renderRefundDetailPanel(item, detail);
+    } catch(e) {
+      renderRefundDetailPanel(item, null, '상세 조회 실패: ' + e.message);
+    }
     return;
   }
 
@@ -2761,6 +2772,61 @@ function renderClaimDetailPanel(item, detail, errMsg) {
     </div>` : ''}
     ${isExchangeTab ? `<div style="padding:10px 14px;background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--rs);font-size:12px;color:var(--tx2);margin-bottom:12px;">교환은 조회만 가능합니다</div>` : ''}
     ${detailRows ? `<div style="font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:6px;">상세 정보</div>${detailRows}` : ''}
+  </div>`;
+}
+
+function renderRefundDetailPanel(item, detail, errMsg) {
+  const el = document.getElementById('claim-detail-panel');
+  if (!el) return;
+
+  const refundData = detail && detail.refund ? detail.refund : null;
+
+  const orderId = escHtml((refundData && refundData.order_id) || item.order_id || item.orderId || '-');
+  const refundCode = escHtml((refundData && refundData.refund_code) || item.refund_code || '-');
+
+  const statusVal = (refundData && refundData.status) || item.refund_status || item.status || '';
+  let statusBadge = '';
+  if (statusVal === 'T') {
+    statusBadge = `<span class="badge badge-green">환불완료</span>`;
+  } else if (statusVal === 'F') {
+    statusBadge = `<span class="badge" style="background:rgba(245,158,11,.12);color:#f59e0b;border:1px solid rgba(245,158,11,.3);">환불전</span>`;
+  } else {
+    statusBadge = `<span class="badge badge-gray">${escHtml(statusVal) || '-'}</span>`;
+  }
+
+  const reason = escHtml((refundData && refundData.refund_reason) || item.refund_reason || '-');
+  const methods = escHtml((refundData && refundData.refund_methods) || '-');
+  const rawAmt = refundData && refundData.refund_amount != null ? refundData.refund_amount : null;
+  const refundAmount = rawAmt != null ? Number(rawAmt).toLocaleString('ko-KR') + '원' : '-';
+  const manager = escHtml((refundData && refundData.refund_manager) || '-');
+
+  const bankName = refundData && refundData.refund_bank_name;
+  const bankAccountNo = refundData && refundData.refund_bank_account_no;
+  const bankHolder = refundData && refundData.refund_bank_account_holder;
+  const bankRow = bankName ? `
+    <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bdr);font-size:12px;">
+      <span style="color:var(--tx3);">환불계좌</span>
+      <span style="text-align:right;font-family:'JetBrains Mono',monospace;font-size:11px;">${escHtml(bankName)} ${escHtml(bankAccountNo||'')} (${escHtml(bankHolder||'')})</span>
+    </div>` : '';
+
+  const errRow = errMsg ? `<div style="padding:10px;background:var(--rl);border:1px solid var(--rb);border-radius:var(--rs);font-size:12px;color:var(--red);margin-top:12px;">${escHtml(errMsg)}</div>` : '';
+
+  el.innerHTML = `<div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="font-size:14px;font-weight:700;">클레임 상세</div>
+      <button class="btn btn-sm btn-ghost" onclick="renderClaimDetailPanel(null);claimState.selectedItem=null;renderClaimListBody();">닫기</button>
+    </div>
+    <div style="background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--rs);padding:14px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bdr);font-size:12px;"><span style="color:var(--tx3);">주문번호</span><span style="font-family:'JetBrains Mono',monospace;">${orderId}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bdr);font-size:12px;"><span style="color:var(--tx3);">환불번호</span><span style="font-family:'JetBrains Mono',monospace;color:var(--gold);">${refundCode}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bdr);font-size:12px;"><span style="color:var(--tx3);">상태</span>${statusBadge}</div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bdr);font-size:12px;"><span style="color:var(--tx3);">사유</span><span style="text-align:right;">${reason}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bdr);font-size:12px;"><span style="color:var(--tx3);">환불방식</span><span>${methods}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bdr);font-size:12px;"><span style="color:var(--tx3);">환불금액</span><span style="font-family:'JetBrains Mono',monospace;color:var(--gold);">${refundAmount}</span></div>
+      ${bankRow}
+      <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px;"><span style="color:var(--tx3);">환불담당자</span><span>${manager}</span></div>
+    </div>
+    ${errRow}
   </div>`;
 }
 
