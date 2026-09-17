@@ -1819,7 +1819,7 @@ async function domeConsignQueryInvoices() {
     const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-domeggook-consign-orderlist?biz=' + bizCode + '&day=15');
     if (!res.ok) throw new Error('서버 오류: ' + res.status);
     const raw = await res.json();
-    const domeOrders = Array.isArray(raw) ? raw : (raw.orders || raw.items || []);
+    const domeOrders = Array.isArray(raw) ? raw : (raw.domeggook?.items || raw.orders || raw.items || []);
 
     const phoneToC4Order = {};
     DomeConsign.orders.forEach(o => {
