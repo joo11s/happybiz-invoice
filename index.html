@@ -1707,6 +1707,16 @@ async function domeConsignExportExcel() {
   toast(filename + ' 다운로드!', 'ok');
 }
 
+const DOME_COURIER_MAP = [
+  { pattern: /CJ|대한통운/, code: '0006' },
+  { pattern: /한진/, code: '0018' },
+  { pattern: /롯데/, code: '0019' }
+];
+function mapDomeCourierCode(name) {
+  const found = DOME_COURIER_MAP.find(c => c.pattern.test(name || ''));
+  return found ? found.code : null;
+}
+
 async function domeConsignQueryInvoices() {
   if (!DomeConsign.bizId) return toast('사업자를 선택하세요', 'err');
   const resultEl = document.getElementById('dcon-stepb-result');
@@ -1719,7 +1729,6 @@ async function domeConsignQueryInvoices() {
     const raw = await res.json();
     const domeOrders = Array.isArray(raw) ? raw : (raw.orders || raw.items || []);
 
-    // 왼쪽 패널 주문 → 전화번호 인덱스
     const phoneToC4Order = {};
     DomeConsign.orders.forEach(o => {
       const r = (o.receivers && o.receivers[0]) || {};
@@ -1727,7 +1736,8 @@ async function domeConsignQueryInvoices() {
       if (ph) phoneToC4Order[ph] = o;
     });
 
-    const matched = [];
+    const uploadable = [];
+    const manualOnly = [];
     let noInvoiceCnt = 0, noMatchCnt = 0;
 
     domeOrders.forEach(domeOrder => {
@@ -1737,46 +1747,71 @@ async function domeConsignQueryInvoices() {
       );
       const trackingNo = (domeOrder.delivery && domeOrder.delivery.code)
         || domeOrder.invoiceNo || domeOrder.invoice_no || domeOrder.trackingNo || '';
+      const courierName = (domeOrder.delivery && domeOrder.delivery.companyName) || domeOrder.courierName || '';
+      const courierCode = mapDomeCourierCode(courierName);
 
       const c4Order = phoneToC4Order[ph];
       if (!c4Order) { noMatchCnt++; return; }
       if (!trackingNo) { noInvoiceCnt++; return; }
 
       const trackingClean = String(trackingNo).replace(/[^0-9-]/g, '');
-      // 도매매 아이템마다 item_order_no 한 행씩
       const domeItems = (c4Order.items || []).filter(i => (i.custom_product_code || '').startsWith('도매매 '));
-      if (domeItems.length) {
-        domeItems.forEach(item => {
-          const itemOrderNo = item.order_item_code || item.item_order_no || c4Order.item_order_no || c4Order.order_id;
-          matched.push([c4Order.order_id, itemOrderNo, trackingClean, '']);
-        });
-      } else {
-        matched.push([c4Order.order_id, c4Order.item_order_no || c4Order.order_id, trackingClean, '']);
-      }
+      const rows = domeItems.length
+        ? domeItems.map(item => [c4Order.order_id, item.order_item_code || item.item_order_no || c4Order.item_order_no || c4Order.order_id, trackingClean, courierCode])
+        : [[c4Order.order_id, c4Order.item_order_no || c4Order.order_id, trackingClean, courierCode]];
+
+      rows.forEach(row => (row[3] ? uploadable : manualOnly).push(row));
     });
 
-    window._dconMatchedRows = matched;
+    window._dconMatchedRows = manualOnly.map(r => [r[0], r[1], r[2], '']);
 
-    const failHtml = (noInvoiceCnt + noMatchCnt) ? `
-      <div style="margin-top:6px;font-size:11px;color:var(--tx3)">
-        ${noMatchCnt ? '카페24 미매칭: ' + noMatchCnt + '건 · ' : ''}${noInvoiceCnt ? '송장없음: ' + noInvoiceCnt + '건' : ''}
-      </div>` : '';
+    let autoSuccessCnt = 0, autoFailCnt = 0, autoFailMsgs = [];
+    if (uploadable.length) {
+      const requests = uploadable.map(r => ({ order_id: r[0], tracking_no: r[2], shipping_company_code: r[3], status: 'shipping' }));
+      try {
+        const upRes = await fetch('https://n8n.wonflowai.com/webhook/soulkit-shipment-register', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bizId: bizCode, requests })
+        });
+        let upJson = {};
+        try { upJson = await upRes.json(); } catch (_) {}
+        if (!upRes.ok) {
+          autoFailCnt = uploadable.length;
+          autoFailMsgs.push(upJson.message || upJson.error || ('HTTP ' + upRes.status));
+        } else if (Array.isArray(upJson)) {
+          upJson.forEach((item, idx) => {
+            if (item.success === false || item.error) { autoFailCnt++; autoFailMsgs.push((uploadable[idx]?.[0]) + ': ' + (item.message || item.error || '실패')); }
+            else autoSuccessCnt++;
+          });
+        } else {
+          autoSuccessCnt = uploadable.length;
+        }
+      } catch (e) {
+        autoFailCnt = uploadable.length;
+        autoFailMsgs.push(e.message);
+      }
+    }
 
-    const dlBtn = matched.length ? `
-      <button class="btn btn-gold btn-full" style="margin-top:12px" onclick="domeConsignDlCsv()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
-        카페24 운송장 업로드 CSV 다운로드 (${matched.length}건)
-      </button>
-      <div style="margin-top:5px;font-size:0.75rem;color:gray;line-height:1.4">자동 반영이 정상 처리된 경우 다운로드 불필요 · 매칭 실패 등 예외 상황에서 카페24에 수동 업로드할 때만 사용</div>` : '';
+    const failHtml = (noInvoiceCnt + noMatchCnt) ? '<div style="margin-top:6px;font-size:11px;color:var(--tx3)">' +
+        (noMatchCnt ? '카페24 미매칭: ' + noMatchCnt + '건 · ' : '') + (noInvoiceCnt ? '송장없음: ' + noInvoiceCnt + '건' : '') +
+      '</div>' : '';
 
-    resultEl.innerHTML = `
-      <div class="match-result-box" style="margin-top:10px">
-        <div class="match-result-title">매칭 ${matched.length}건 / 송장없음 ${noInvoiceCnt}건 / 미매칭 ${noMatchCnt}건</div>
-        ${failHtml}
-      </div>${dlBtn}`;
+    const autoHtml = uploadable.length ? '<div style="margin-top:6px;font-size:12px;color:' + (autoFailCnt ? 'var(--red)' : 'var(--tx2)') + '">' +
+        '카페24 자동반영: 성공 ' + autoSuccessCnt + '건' + (autoFailCnt ? ' / 실패 ' + autoFailCnt + '건' : '') +
+      '</div>' + (autoFailMsgs.length ? '<div style="margin-top:2px;font-size:11px;color:var(--red)">' + autoFailMsgs.slice(0,5).join('<br>') + '</div>' : '') : '';
 
-    if (matched.length) toast('매칭 완료: ' + matched.length + '건', 'ok');
-    else toast('매칭된 주문이 없습니다', 'err');
+    const dlBtn = manualOnly.length ? '<button class="btn btn-gold btn-full" style="margin-top:12px" onclick="domeConsignDlCsv()">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>' +
+        '카페24 수동 업로드 CSV 다운로드 (' + manualOnly.length + '건 · 택배사 자동인식 실패)' +
+      '</button>' : '';
+
+    resultEl.innerHTML = '<div class="match-result-box" style="margin-top:10px"><div class="match-result-title">매칭 ' +
+      (uploadable.length + manualOnly.length) + '건 / 송장없음 ' + noInvoiceCnt + '건 / 미매칭 ' + noMatchCnt + '건</div>' +
+      autoHtml + failHtml + '</div>' + dlBtn;
+
+    if (autoSuccessCnt) toast('카페24 자동반영 완료: ' + autoSuccessCnt + '건', 'ok');
+    else if (manualOnly.length) toast('택배사 자동인식 실패 ' + manualOnly.length + '건 - CSV로 수동 처리하세요', 'err');
+    else if (!uploadable.length && !manualOnly.length) toast('매칭된 주문이 없습니다', 'err');
   } catch (e) {
     resultEl.innerHTML = '<div style="margin-top:8px;font-size:12px;color:var(--red)">오류: ' + e.message + '</div>';
     toast('송장 조회 실패: ' + e.message, 'err');
