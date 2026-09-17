@@ -1633,7 +1633,7 @@ async function domeConsignExportExcel() {
   const checkedOrders = DomeConsign.orders.filter(o => DomeConsign.checkedIds.has(o.order_id));
 
   for (const order of checkedOrders) {
-    const market = DomeConsign.domeToggle[order.order_id] ? 'dome' : 'supply';
+    const market = DomeConsign.domeToggle[order.order_id] ? '도매꾹' : '도매매';
     const r = (order.receivers && order.receivers[0]) || {};
     const recName = r.name || r.receiver_name || order.billing_name || '';
     const zipcode = r.zipcode || r.receiver_zipcode || '';
