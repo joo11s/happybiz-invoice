@@ -520,10 +520,16 @@ select.modal-sel option{background:var(--sur2);}
           </div>
         </div>
 
-        <button class="btn btn-gold btn-full" id="dcon-export-btn" onclick="domeConsignExportExcel()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
-          일괄 발송 엑셀 생성
-        </button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-gold" id="dcon-autosend-btn" style="flex:1" onclick="domeConsignAutoSend()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+            자동 발주 전송
+          </button>
+          <button class="btn" id="dcon-export-btn" style="flex:1;background:transparent;border:1px solid var(--gold, #f0d9a8);color:var(--gold, #f0d9a8)" onclick="domeConsignDownloadExcel()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
+            엑셀만 다운로드
+          </button>
+        </div>
         <div id="dcon-export-result"></div>
       </div>
 
@@ -1611,25 +1617,21 @@ async function fetchDomeConsignOrders() {
   }
 }
 
-async function domeConsignExportExcel() {
-  if (!DomeConsign.bizId) return toast('사업자를 선택하세요', 'err');
-  if (!DomeConsign.checkedIds.size) return toast('주문을 선택하세요', 'err');
+async function domeConsignBuildOrderRows() {
+  if (!DomeConsign.bizId) { toast('사업자를 선택하세요', 'err'); return null; }
+  if (!DomeConsign.checkedIds.size) { toast('주문을 선택하세요', 'err'); return null; }
 
   const biz = DB.businesses.find(b => b.id === DomeConsign.bizId);
   const bizName = biz?.name || '';
-  const resultEl = document.getElementById('dcon-export-result');
-  resultEl.innerHTML = '<div style="margin-top:8px;font-size:12px;color:var(--tx2)">옵션 코드 조회 중... (잠시 기다려 주세요)</div>';
 
-  // sourcing state 일괄 조회
   let sourcingStates = [];
   try {
     const sr = await fetch('https://n8n.wonflowai.com/webhook/soulkit-sourcing-state-get-v2');
     if (sr.ok) { const sj = await sr.json(); sourcingStates = Array.isArray(sj) ? sj : []; }
   } catch (_) {}
 
-  // 상품별 item detail 캐시
   const itemDetailCache = {};
-  const dataRows = [];
+  const rows = [];
   const checkedOrders = DomeConsign.orders.filter(o => DomeConsign.checkedIds.has(o.order_id));
 
   for (const order of checkedOrders) {
@@ -1652,7 +1654,6 @@ async function domeConsignExportExcel() {
       let optionCode = '00';
       let optionName = '';
 
-      // sourcing state에서 해당 상품 찾기
       const ss = sourcingStates.find(s => String(s.itemNo) === String(itemNo) && s.mall === bizName);
       if (ss) {
         const optMap = ss.option_map;
@@ -1660,7 +1661,6 @@ async function domeConsignExportExcel() {
           const mapEntry = optMap.find(m => String(m.variant_code) === String(variantCode));
           if (mapEntry !== undefined) {
             const idx = mapEntry.index;
-            // item detail 조회 (캐시)
             if (!itemDetailCache[itemNo]) {
               try {
                 const dr = await fetch('https://n8n.wonflowai.com/webhook/soulkit-domeggook-item-detail', {
@@ -1681,18 +1681,36 @@ async function domeConsignExportExcel() {
         }
       }
 
-      dataRows.push([
+      rows.push({
         market, itemNo, optionCode, optionName, quantity,
-        recName, zipcode, address, addressDetail, phone, phone2,
-        bizName, '', '', ''
-      ]);
+        recName, zipcode, address, addressDetail, phone, phone2, bizName,
+        orderId: order.order_id
+      });
     }
   }
 
-  if (!dataRows.length) {
-    resultEl.innerHTML = '<div style="margin-top:8px;font-size:12px;color:var(--red)">변환할 도매매 아이템이 없습니다</div>';
-    return toast('변환할 도매매 아이템이 없습니다', 'err');
+  if (!rows.length) {
+    toast('변환할 도매매 아이템이 없습니다', 'err');
+    return null;
   }
+  return { rows, bizName };
+}
+
+function domeConsignRowsToDataRows(rows) {
+  return rows.map(row => ([
+    row.market, row.itemNo, row.optionCode, row.optionName, row.quantity,
+    row.recName, row.zipcode, row.address, row.addressDetail, row.phone, row.phone2,
+    row.bizName, '', '', ''
+  ]));
+}
+
+async function domeConsignDownloadExcel() {
+  const resultEl = document.getElementById('dcon-export-result');
+  resultEl.innerHTML = '<div style="margin-top:8px;font-size:12px;color:var(--tx2)">옵션 코드 조회 중... (잠시 기다려 주세요)</div>';
+
+  const built = await domeConsignBuildOrderRows();
+  if (!built) { resultEl.innerHTML = ''; return; }
+  const { rows, bizName } = built;
 
   const headers = [
     '마켓', '상품번호', '옵션코드', '옵션명', '수량',
@@ -1702,9 +1720,83 @@ async function domeConsignExportExcel() {
   ];
 
   const filename = `도매꾹위탁발주_${bizName}_${today()}.xlsx`;
-  dlXlsx([headers, ...dataRows], filename);
-  resultEl.innerHTML = `<div class="file-done-sm" style="margin-top:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>${filename} · ${dataRows.length}행 생성됨</div>`;
+  dlXlsx([headers, ...domeConsignRowsToDataRows(rows)], filename);
+  resultEl.innerHTML = `<div class="file-done-sm" style="margin-top:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>${filename} · ${rows.length}행 생성됨</div>`;
   toast(filename + ' 다운로드!', 'ok');
+}
+
+async function domeConsignAutoSend() {
+  const resultEl = document.getElementById('dcon-export-result');
+  resultEl.innerHTML = '<div style="margin-top:8px;font-size:12px;color:var(--tx2)">옵션 코드 조회 중... (잠시 기다려 주세요)</div>';
+
+  const built = await domeConsignBuildOrderRows();
+  if (!built) { resultEl.innerHTML = ''; return; }
+  const { rows, bizName } = built;
+  const bizCode = getBizWebhookCode(DomeConsign.bizId);
+
+  resultEl.innerHTML = `<div style="margin-top:8px;font-size:12px;color:var(--tx2)">도매꾹 자동 발주 전송 중... (0/${rows.length})</div>`;
+
+  const failedRows = [];
+  let successCnt = 0;
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    resultEl.innerHTML = `<div style="margin-top:8px;font-size:12px;color:var(--tx2)">도매꾹 자동 발주 전송 중... (${i+1}/${rows.length})</div>`;
+    const marketCode = row.market === '도매꾹' ? 'dome' : 'supply';
+    const payload = {
+      bizId: bizCode,
+      receipt: 0,
+      market: marketCode,
+      itemNo: Number(row.itemNo),
+      deliWho: 'S',
+      options: [{ code: row.optionCode, qty: row.quantity }],
+      sellerMemo: '',
+      deliveryRequest: '',
+      receiver: {
+        name: row.recName, email: '', zipcode: row.zipcode,
+        addr1: row.address, addr2: row.addressDetail,
+        mobile: row.phone, phone2: row.phone2 || '',
+        shopName: row.bizName, customsCode: ''
+      }
+    };
+    try {
+      const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-domeggook-consign-order', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      });
+      let json = {};
+      try { json = await res.json(); } catch (_) {}
+      const ok = res.ok && !json.errors && (json.domeggook?.result === 'SUCCESS' || json.result === 'SUCCESS');
+      if (ok) successCnt++;
+      else failedRows.push({ row, reason: json.errors?.dmessage || json.message || ('HTTP ' + res.status) });
+    } catch (e) {
+      failedRows.push({ row, reason: e.message });
+    }
+  }
+
+  // 기록용 엑셀은 항상 같이 남긴다
+  const headers = [
+    '마켓', '상품번호', '옵션코드', '옵션명', '수량',
+    '수령자명', '우편번호', '배송주소', '배송 상세주소\n(선택입력)',
+    '휴대전화', '추가연락처\n(선택입력)', '쇼핑몰명\n(도매매 전용)',
+    '전달사항', '배송요청사항\n(도매매 전용)', '통관고유번호\n(해외직배송 전용)'
+  ];
+  const filename = `도매꾹위탁발주_${bizName}_${today()}.xlsx`;
+  dlXlsx([headers, ...domeConsignRowsToDataRows(rows)], filename);
+
+  const failHtml = failedRows.length ? `
+    <div style="margin-top:8px;font-size:12px;color:var(--red)">
+      전송 실패 ${failedRows.length}건 (아래 사유 참고, 엑셀로 수동 처리하세요):<br>
+      ${failedRows.slice(0,10).map(f => `상품 ${f.row.itemNo}: ${f.reason}`).join('<br>')}
+    </div>` : '';
+
+  resultEl.innerHTML = `
+    <div class="match-result-box" style="margin-top:10px">
+      <div class="match-result-title">자동 발주 성공 ${successCnt}건 / 실패 ${failedRows.length}건</div>
+      ${failHtml}
+    </div>
+    <div class="file-done-sm" style="margin-top:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>${filename} · 기록용 다운로드 완료</div>
+  `;
+  toast(`자동 발주 성공 ${successCnt}건 / 실패 ${failedRows.length}건`, failedRows.length ? 'err' : 'ok');
 }
 
 const DOME_COURIER_MAP = [
