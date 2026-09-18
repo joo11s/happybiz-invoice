@@ -1865,6 +1865,7 @@ async function domeConsignQueryInvoices() {
       const c4Order = phoneToC4Order[ph];
       if (!c4Order) { noMatchCnt++; return; }
       if (!trackingNo) { noInvoiceCnt++; return; }
+      if (c4Order.tracking_no) { return; } // 카페24에 이미 송장이 등록된 주문은 재전송하지 않음(중복 알림/중복등록 방지)
 
       const trackingClean = String(trackingNo).replace(/[^0-9-]/g, '');
       const domeItems = (c4Order.items || []).filter(i => (i.custom_product_code || '').startsWith('도매매 '));
