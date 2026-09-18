@@ -1819,7 +1819,26 @@ async function domeConsignQueryInvoices() {
     const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-domeggook-consign-orderlist?biz=' + bizCode + '&day=15');
     if (!res.ok) throw new Error('서버 오류: ' + res.status);
     const raw = await res.json();
-    const domeOrders = Array.isArray(raw) ? raw : (raw.domeggook?.items || raw.orders || raw.items || []);
+    const domeOrderList = Array.isArray(raw) ? raw : (raw.domeggook?.items || raw.orders || raw.items || []);
+
+    // 목록조회(getOrderList)에는 전화번호/송장정보가 없어서, 주문건별로 상세조회(getOrderView)를 추가 호출한다
+    resultEl.innerHTML = '<div style="margin-top:8px;font-size:12px;color:var(--tx2)">도매꾹 주문 상세 조회 중... (0/' + domeOrderList.length + ')</div>';
+    const domeOrders = [];
+    for (let i = 0; i < domeOrderList.length; i++) {
+      const o = domeOrderList[i];
+      resultEl.innerHTML = '<div style="margin-top:8px;font-size:12px;color:var(--tx2)">도매꾹 주문 상세 조회 중... (' + (i+1) + '/' + domeOrderList.length + ')</div>';
+      const orderNoDigits = String(o.orderNo || '').replace(/^OR/i, '');
+      if (!orderNoDigits) continue;
+      try {
+        const dr = await fetch('https://n8n.wonflowai.com/webhook/soulkit-domeggook-consign-status?bizId=' + bizCode + '&orderNo=' + orderNoDigits);
+        if (dr.ok) {
+          const dj = await dr.json();
+          const detail = (dj.domeggook?.items || dj.items || [])[0];
+          if (detail) domeOrders.push({ ...o, ...detail });
+        }
+      } catch (_) {}
+      if (i < domeOrderList.length - 1) await new Promise(r => setTimeout(r, 200));
+    }
 
     const phoneToC4Order = {};
     DomeConsign.orders.forEach(o => {
@@ -1834,6 +1853,7 @@ async function domeConsignQueryInvoices() {
 
     domeOrders.forEach(domeOrder => {
       const ph = normPhoneCC(
+        domeOrder.consumer?.mobile || domeOrder.consumer?.phone ||
         domeOrder.receiverPhone || domeOrder.receiver_phone || domeOrder.mobile ||
         domeOrder.receiverMobile || domeOrder.phone || ''
       );
