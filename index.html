@@ -240,6 +240,343 @@ select.modal-sel option{background:var(--sur2);}
 .order-row:hover{background:var(--sur3);}
 .order-row.chk-sel{background:var(--gold-bg);}
 .o-chk{width:14px;height:14px;accent-color:var(--gold);cursor:pointer;flex-shrink:0;}
+
+/* ════════════════════════════════════════
+   RESPONSIVE CSS — mobile/tablet
+   PC (1025px+) layout is NOT touched here.
+   All changes live inside @media queries.
+   ════════════════════════════════════════ */
+
+/* ── A) Header: 2-row layout (≤768px) ── */
+@media (max-width: 768px) {
+  .header {
+    height: auto;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  /* Row 1: logo + section tabs */
+  .header-left {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+  }
+  /* Row 1 inner — logo + section tabs side by side */
+  .header-left > .header-title,
+  .header-left > #app-section-tab-bar {
+    display: inline-flex;
+  }
+  /* Make Row 1 a flex row: logo + section-tab-bar */
+  .header-left {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 0 12px;
+    gap: 8px;
+    min-height: 44px;
+  }
+  /* Platform tabs wrap — Row 2 */
+  #main-tab-bar-wrap {
+    width: 100%;
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+    border-left: none !important;
+    border-top: 1px solid var(--bdr);
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    /* hide scrollbar */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  #main-tab-bar-wrap::-webkit-scrollbar { display: none; }
+  #main-tab-bar-wrap > #main-tab-bar {
+    display: flex;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    padding: 4px 8px;
+  }
+  #main-tab-bar .tab {
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-height: 40px;
+    scroll-snap-align: start;
+    padding: 6px 12px;
+  }
+  /* section tab bar — nowrap */
+  #app-section-tab-bar .tab {
+    white-space: nowrap;
+  }
+  /* Recalculate layout heights because header is now taller */
+  .layout,
+  .c4-two-col,
+  #section-invoice,
+  #section-claim {
+    height: auto;
+    min-height: calc(100vh - 90px); /* approx 2-row header */
+  }
+}
+
+/* ── B) Two-column → single column (≤1024px) ── */
+@media (max-width: 1024px) {
+  /* c4-two-col, and same structure in dome-supply / dome-consign tabs */
+  .c4-two-col {
+    flex-direction: column;
+    height: auto;
+    overflow-y: visible;
+  }
+  .c4-left-panel {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--bdr);
+    overflow: visible;
+    max-height: none;
+    height: auto;
+  }
+  .c4-right-panel {
+    width: 100%;
+    overflow-y: visible;
+  }
+  /* order-list-body: give it a reasonable max-height on tablet */
+  .order-list-body {
+    max-height: 360px;
+    overflow-y: auto;
+    flex: unset;
+  }
+  /* The order block should not stretch to full viewport height */
+  .c4-order-block {
+    flex: unset;
+    height: auto;
+    min-height: 0;
+  }
+  #c4-order-panel-body {
+    flex: unset;
+    min-height: 0;
+  }
+  /* layout & section wrappers: let content flow naturally */
+  .layout {
+    flex-direction: column;
+    height: auto;
+  }
+  #section-invoice {
+    height: auto;
+  }
+  /* claim management: stack panels */
+  #section-claim {
+    height: auto;
+    overflow: visible;
+  }
+  #section-claim > div[style*="display:flex"] {
+    flex-direction: column;
+  }
+  #claim-detail-panel {
+    width: 100% !important;
+    flex-shrink: unset;
+    border-top: 1px solid var(--bdr);
+  }
+  /* claim table header: enable horizontal scroll via parent wrapper */
+  #claim-table-header {
+    min-width: 820px;
+  }
+  .claim-table-wrap {
+    overflow-x: auto;
+  }
+  /* Tables inside modals / step blocks */
+  .mt {
+    min-width: 480px;
+  }
+  .step-block .mt,
+  .settings-card .mt {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+/* ── C) Order status tabs horizontal scroll (≤768px) ── */
+@media (max-width: 768px) {
+  .order-status-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    scroll-snap-type: x mandatory;
+  }
+  .order-status-tabs::-webkit-scrollbar { display: none; }
+  .order-status-tab {
+    white-space: nowrap;
+    flex-shrink: 0;
+    scroll-snap-align: start;
+    min-height: 40px;
+  }
+  /* Order row text: natural wrapping, no overflow */
+  .order-row {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .order-row > div[style*="flex:1"] {
+    word-break: keep-all;
+    min-width: 0;
+  }
+  /* Claim type tabs */
+  .claim-type-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+  .claim-type-tabs::-webkit-scrollbar { display: none; }
+  .claim-type-tab {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+}
+
+/* ── D) Form elements & action buttons (≤768px) ── */
+@media (max-width: 768px) {
+  /* biz-bar: stack vertically, full width */
+  .biz-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .biz-select {
+    width: 100%;
+    min-height: 44px;
+  }
+  .btn-add-biz {
+    width: 100%;
+    min-height: 44px;
+    text-align: center;
+  }
+  /* Action buttons full width */
+  .btn-full {
+    width: 100%;
+    justify-content: center;
+  }
+  /* Courier selector */
+  .field-group .biz-select {
+    width: 100% !important;
+    min-height: 44px;
+  }
+  /* Pool bar */
+  .pool-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  /* Claim top bar */
+  .claim-top-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  /* Claim biz select inside header bar */
+  #section-claim > div:first-child {
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  #section-claim #claim-biz-sel {
+    max-width: 100% !important;
+    width: 100%;
+    min-height: 44px;
+  }
+  /* dcon / dsup inner action buttons */
+  #dcon-autosend-btn,
+  #dcon-export-btn {
+    flex: unset;
+    width: 100%;
+  }
+  #tab-dome-consign .step-block > div[style*="display:flex;gap:8px"] {
+    flex-direction: column;
+  }
+}
+
+/* ── E) File upload zones (≤768px) ── */
+@media (max-width: 768px) {
+  .upload-zone {
+    padding: 12px 10px;
+    min-height: unset;
+  }
+  .upload-zone svg {
+    width: 18px;
+    height: 18px;
+    margin-bottom: 4px;
+  }
+  .upload-zone p {
+    word-break: keep-all;
+    white-space: normal;
+  }
+  .upload-zone small {
+    white-space: normal;
+  }
+}
+
+/* ── F) Settings, modals (≤768px) ── */
+@media (max-width: 768px) {
+  /* Settings grid → 1 column */
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+  /* Modals: fluid width, max-height with scroll */
+  .modal {
+    width: min(94vw, 540px);
+    max-height: 90dvh;
+    overflow-y: auto;
+  }
+  .modal-ov {
+    align-items: flex-start;
+    padding: 20px 0;
+  }
+  /* Table overflow inside modals */
+  .modal .mt {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+  }
+  /* Claim list body: overflow-x scroll wrapper */
+  #claim-list-body {
+    overflow-x: auto;
+  }
+  /* claim table: min-width so cells don't collapse */
+  #claim-list-body > div {
+    min-width: 700px;
+  }
+  #claim-table-header {
+    min-width: 700px;
+  }
+  /* Settings page */
+  .settings-page {
+    padding: 14px;
+  }
+}
+
+/* ── 480px extra tightening ── */
+@media (max-width: 480px) {
+  .header-left {
+    padding: 0 8px;
+    gap: 6px;
+  }
+  #main-tab-bar .tab {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+  .step-block {
+    padding: 14px 12px;
+  }
+  .c4-left-panel,
+  .c4-right-panel {
+    padding: 12px;
+  }
+  .order-status-tab {
+    padding: 7px 8px;
+    font-size: 12px;
+  }
+  .modal {
+    padding: 16px;
+  }
+}
 </style>
 </head>
 <body>
@@ -793,6 +1130,8 @@ function switchPlatformTab(id, el) {
     const tc = document.getElementById('tab-' + id);
     if (tc) { tc.style.display = 'flex'; tc.classList.add('active'); }
   }
+  // Scroll active platform tab into view (horizontal scroll on mobile)
+  if (el) el.scrollIntoView({ inline: 'center', block: 'nearest' });
 }
 
 const STD = [
