@@ -634,7 +634,7 @@ select.modal-sel option{background:var(--sur2);}
   <div class="modal">
     <div class="mh"><h2>사업자 추가</h2><span class="mc" onclick="closeModal('m-add-biz')">×</span></div>
     <label class="lbl">사업자명</label>
-    <input type="text" id="new-biz-name" placeholder="예: 소울스토어">
+    <input type="text" id="new-biz-name" placeholder="예: 제이원투몰">
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
       <button class="btn" onclick="closeModal('m-add-biz')">취소</button>
       <button class="btn btn-gold" onclick="addBiz()">추가</button>
@@ -808,20 +808,16 @@ function initDB() {
   if (!db) {
     db = {
       businesses: [
-        {id:'b1', name:'소울스토어', platforms:[], senderName:'소울스토어', senderPhone:'010-2385-9982', senderAddress:'전북특별자치도 전주시 완산구 흑석로 53, 102동 207호(서서학동, 푸른맨션)'},
         {id:'b2', name:'제이원투몰', platforms:[], senderName:'제이원', senderPhone:'010-9862-7739', senderAddress:'전북특별자치도 전주시 덕진구 번영로 230-7, 1동(성덕동)'},
-        {id:'b3', name:'행복산업', platforms:[], senderName:'행복산업', senderPhone:'010-6492-7749', senderAddress:'전북특별자치도 전주시 덕진구 번영로 230-7, (성덕동)'},
-        {id:'b4', name:'태실장픽앤샵', platforms:[], senderName:'', senderPhone:'', senderAddress:''}
+        {id:'b3', name:'행복산업', platforms:[], senderName:'행복산업', senderPhone:'010-6492-7749', senderAddress:'전북특별자치도 전주시 덕진구 번영로 230-7, (성덕동)'}
       ],
       platforms: [],
       couriers: []
     };
   }
   const bizDefaults = {
-    b1: {senderName:'소울스토어', senderPhone:'010-2385-9982', senderAddress:'전북특별자치도 전주시 완산구 흑석로 53, 102동 207호(서서학동, 푸른맨션)'},
     b2: {senderName:'제이원', senderPhone:'010-9862-7739', senderAddress:'전북특별자치도 전주시 덕진구 번영로 230-7, 1동(성덕동)'},
-    b3: {senderName:'행복산업', senderPhone:'010-6492-7749', senderAddress:'전북특별자치도 전주시 덕진구 번영로 230-7, (성덕동)'},
-    b4: {senderName:'', senderPhone:'', senderAddress:''}
+    b3: {senderName:'행복산업', senderPhone:'010-6492-7749', senderAddress:'전북특별자치도 전주시 덕진구 번영로 230-7, (성덕동)'}
   };
   if (db.businesses) {
     db.businesses.forEach(b => {
@@ -970,6 +966,13 @@ function initDB() {
   if (hanjinIdx === -1) { db.couriers.push(hanjinPreset); }
   else { db.couriers[hanjinIdx] = hanjinPreset; }
 
+  // ── 마이그레이션: b1(소울스토어)/b4(태실장픽앤샵) 제거 ──
+  if (db.businesses) {
+    db.businesses = db.businesses.filter(b => b.id !== 'b1' && b.id !== 'b4' && b.name !== '소울스토어' && b.name !== '태실장픽앤샵');
+  }
+  localStorage.removeItem('icdb2_pool_b1');
+  localStorage.removeItem('icdb2_pool_b4');
+
   localStorage.setItem('icdb2', JSON.stringify(db));
   return db;
 }
@@ -997,7 +1000,7 @@ function updateC4Labels() {
 }
 
 // 토스쇼핑 전용 사업자 ID 목록 (토스 계정이 있는 사업자만)
-const TOSS_BIZ_IDS = ['b1', 'b2', 'b3']; // 소울스토어, 제이원투몰, 행복산업
+const TOSS_BIZ_IDS = ['b2', 'b3']; // 제이원투몰, 행복산업
 
 function renderCafe24() {
   const sel = document.getElementById('c4-biz-sel');
@@ -1490,7 +1493,7 @@ function onDomeConsignBizChange() {
 function renderDomeConsign() {
   const sel = document.getElementById('dcon-biz-sel');
   if (!sel) return;
-  const bizList = DB.businesses.filter(b => ['b1','b2','b3'].includes(b.id));
+  const bizList = DB.businesses.filter(b => ['b2','b3'].includes(b.id));
   sel.innerHTML = '<option value="">사업자 선택...</option>' +
     bizList.map(b => `<option value="${b.id}" ${b.id === DomeConsign.bizId ? 'selected' : ''}>${b.name}</option>`).join('');
   renderDomeConsignPanel();
