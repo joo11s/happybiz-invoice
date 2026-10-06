@@ -1053,7 +1053,7 @@ const C4_STATUS_MAP = {
   T: '배송완료',
   W: '배송보류'
 };
-const C4_STATUS_TABS = ['입금전', '마켓발주전', '배송준비중', '배송대기', '배송중', '배송완료'];
+const C4_STATUS_TABS = ['취소요청', '취소완료', '입금전', '마켓발주전', '배송준비중', '배송대기', '배송중', '배송완료'];
 
 // ── 토스쇼핑 주문상태 매핑 ──
 const TOSS_STATUS_MAP = {
@@ -1817,8 +1817,12 @@ async function submitDomeSupplyInvoice() {
   }
 }
 
+// ── 취소 상태 판별 헬퍼 (도매꾹 위탁 + 카페24 공용) ──
+function isCancelDone(order){ return order.canceled==='T' || (order.items||[]).some(i=>/^C4/.test(i.order_status||'')||i.status_text==='취소완료'); }
+function isCancelPending(order){ if(isCancelDone(order)) return false; return (order.items||[]).some(i=>/^C/.test(i.order_status||'')||i.status_text==='취소신청'); }
+
 // ── 도매꾹(위탁) 탭 ──
-const DOME_CONSIGN_STATUS_TABS = ['취소요청', '마켓발주전', '배송준비중', '배송대기', '배송중', '배송완료'];
+const DOME_CONSIGN_STATUS_TABS = ['취소요청', '취소완료', '마켓발주전', '배송준비중', '배송대기', '배송중', '배송완료'];
 let DomeConsign = { bizId: null, orders: [], loading: false, error: null, activeTab: '마켓발주전', checkedIds: new Set(), domeToggle: {} };
 
 function onDomeConsignBizChange() {
@@ -1839,15 +1843,16 @@ function renderDomeConsign() {
 }
 
 function domeConsignIsCancelRequested(order) {
-  return (order.items || []).some(i => /^C/.test(i.order_status || '') || i.status_text === '취소신청');
+  return isCancelPending(order) || isCancelDone(order);
 }
 function domeConsignCancelReason(order) {
-  const it = (order.items || []).find(i => /^C/.test(i.order_status || '') || i.status_text === '취소신청');
+  const it = (order.items || []).find(i => /^C/.test(i.order_status || '') || i.status_text === '취소신청' || i.status_text === '취소완료');
   return it ? (it.claim_reason || it.open_market_status || '취소요청') : '';
 }
 
 function domeConsignOrderStatus(order) {
-  if (domeConsignIsCancelRequested(order)) return '취소요청';
+  if (isCancelPending(order)) return '취소요청';
+  if (isCancelDone(order)) return '취소완료';
   if (order.shipping_status === 'F') {
     return order.tracking_no ? '배송대기' : '배송준비중';
   }
@@ -1877,9 +1882,10 @@ function renderDomeConsignPanel() {
 
   const tabsHtml = DOME_CONSIGN_STATUS_TABS.map(tab => {
     const cnt = DomeConsign.orders.filter(o => domeConsignOrderStatus(o) === tab).length;
-    const isCancelTab = tab === '취소요청';
-    const tabColor = (isCancelTab && cnt > 0) ? ' style="color:var(--red)"' : '';
-    const cntStyle = (isCancelTab && cnt > 0) ? ' style="background:var(--red);color:#fff"' : '';
+    const isCancelPendingTab = tab === '취소요청';
+    const isCancelDoneTab = tab === '취소완료';
+    const tabColor = (isCancelPendingTab && cnt > 0) ? ' style="color:var(--red)"' : (isCancelDoneTab ? ' style="color:var(--tx3)"' : '');
+    const cntStyle = (isCancelPendingTab && cnt > 0) ? ' style="background:var(--red);color:#fff"' : '';
     return '<button class="order-status-tab' + (tab === DomeConsign.activeTab ? ' active' : '') + '"' + tabColor + ' onclick="domeConsignSetTab(\'' + tab + '\')">' +
       tab + '<span class="o-tab-cnt"' + cntStyle + '>' + cnt + '</span></button>';
   }).join('');
@@ -1889,7 +1895,9 @@ function renderDomeConsignPanel() {
   const allChecked = selectableFiltered.length > 0 && selectableFiltered.every(o => DomeConsign.checkedIds.has(o.order_id));
 
   const rowsHtml = filtered.length ? filtered.map(order => {
-    const isCancel = domeConsignIsCancelRequested(order);
+    const cancelPending = isCancelPending(order);
+    const cancelDone = isCancelDone(order);
+    const isCancel = cancelPending || cancelDone;
     const cancelReason = isCancel ? domeConsignCancelReason(order) : '';
     const checked = !isCancel && DomeConsign.checkedIds.has(order.order_id);
     const isDome = !!DomeConsign.domeToggle[order.order_id];
@@ -1904,8 +1912,10 @@ function renderDomeConsignPanel() {
     const pName = (item.product_name || '-') + ' x' + qty + '개';
     const oid = order.order_id.replace(/'/g, "\\'");
     const togId = 'dome-tog-' + order.order_id.replace(/[^a-zA-Z0-9]/g, '_');
-    const cancelBadge = isCancel ? '<span style="font-size:10px;color:#fff;background:var(--red);border-radius:3px;padding:1px 4px;flex-shrink:0">취소요청</span>' : '';
-    const cancelReasonHtml = (isCancel && cancelReason) ? '<div style="font-size:11px;color:var(--red);margin-top:2px">' + cancelReason + '</div>' : '';
+    const cancelBadge = cancelDone
+      ? '<span style="font-size:10px;color:var(--tx2);background:var(--sur3);border:1px solid var(--bdr);border-radius:3px;padding:1px 4px;flex-shrink:0">취소완료</span>'
+      : (cancelPending ? '<span style="font-size:10px;color:#fff;background:var(--red);border-radius:3px;padding:1px 4px;flex-shrink:0">취소요청</span>' : '');
+    const cancelReasonHtml = (isCancel && cancelReason) ? '<div style="font-size:11px;color:' + (cancelDone ? 'var(--tx3)' : 'var(--red)') + ';margin-top:2px">' + cancelReason + '</div>' : '';
     const rowClick = isCancel ? '' : ' onclick="domeConsignRowClick(\'' + oid + '\')"';
     return '<div class="order-row' + (checked ? ' chk-sel' : '') + '"' + rowClick + '>' +
       '<input type="checkbox" class="o-chk" ' + (checked ? 'checked' : '') + (isCancel ? ' disabled' : '') + ' onclick="event.stopPropagation()" onchange="domeConsignCheckOrder(\'' + oid + '\',this.checked)">' +
@@ -2358,6 +2368,9 @@ async function fetchC4Orders() {
 
 function c4OrderStatus(order) {
   if (currentPlatform === 'toss') return TOSS_STATUS_MAP[order.orderStatus || order.order_status] || null;
+  // 취소 상태 우선 판별
+  if (isCancelPending(order)) return '취소요청';
+  if (isCancelDone(order)) return '취소완료';
   // 카페24: shipping_status=F일 때 운송장번호 유무로 배송대기/배송준비중 구분
   if (order.shipping_status === 'F') {
     return order.tracking_no ? '배송대기' : '배송준비중';
@@ -2378,7 +2391,10 @@ function c4SearchFilteredOrders() {
 function c4BuildRowsHtml(orders) {
   if (!orders.length) return '<div class="empty-state" style="padding:20px 20px"><p>해당 상태의 주문이 없습니다</p></div>';
   return orders.map(order => {
-    const checked = C4Panel.checkedIds.has(order.order_id);
+    const cancelPending = isCancelPending(order);
+    const cancelDone = isCancelDone(order);
+    const isCancel = cancelPending || cancelDone;
+    const checked = !isCancel && C4Panel.checkedIds.has(order.order_id);
     const r = (order.receivers && order.receivers[0]) || {};
     const item = (order.items && order.items[0]) || {};
     const date = (order.order_date || '').substring(0, 10);
@@ -2391,11 +2407,20 @@ function c4BuildRowsHtml(orders) {
     const place = order.order_place_name || '';
     const oid = order.order_id.replace(/'/g, "\\'");
     const oidData = order.order_id.replace(/"/g, '&quot;');
-    return '<div class="order-row' + (checked ? ' chk-sel' : '') + '" data-oid="' + oidData + '" onclick="c4RowClick(\'' + oid + '\')">' +
-      '<input type="checkbox" class="o-chk" ' + (checked ? 'checked' : '') + ' onclick="event.stopPropagation()" onchange="c4CheckOrder(\'' + oid + '\',this.checked)">' +
+    const cancelBadge = cancelDone
+      ? '<span style="font-size:10px;color:var(--tx2);background:var(--sur3);border:1px solid var(--bdr);border-radius:3px;padding:1px 4px;flex-shrink:0">취소완료</span>'
+      : (cancelPending ? '<span style="font-size:10px;color:#fff;background:var(--red);border-radius:3px;padding:1px 4px;flex-shrink:0">취소요청</span>' : '');
+    const cancelClaimItem = isCancel ? (order.items||[]).find(i=>/^C/.test(i.order_status||'')||i.status_text==='취소신청'||i.status_text==='취소완료') : null;
+    const cancelReasonHtml = cancelClaimItem && (cancelClaimItem.claim_reason || cancelClaimItem.open_market_status)
+      ? '<div style="font-size:11px;color:' + (cancelDone ? 'var(--tx3)' : 'var(--red)') + ';margin-top:2px">' + (cancelClaimItem.claim_reason || cancelClaimItem.open_market_status) + '</div>'
+      : '';
+    const rowClick = isCancel ? '' : ' onclick="c4RowClick(\'' + oid + '\')"';
+    return '<div class="order-row' + (checked ? ' chk-sel' : '') + '" data-oid="' + oidData + '"' + rowClick + '>' +
+      '<input type="checkbox" class="o-chk" ' + (checked ? 'checked' : '') + (isCancel ? ' disabled' : '') + ' onclick="event.stopPropagation()" onchange="c4CheckOrder(\'' + oid + '\',this.checked)">' +
       '<div style="flex:1;min-width:0">' +
         '<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">' +
           '<span style="font-size:11px;color:var(--gold);font-family:\'JetBrains Mono\',monospace;flex-shrink:0">' + order.order_id + '</span>' +
+          cancelBadge +
           '<span style="font-size:10px;color:var(--tx3)">' + date + '</span>' +
           (place ? '<span style="font-size:10px;background:var(--sur3);padding:1px 5px;border-radius:4px;color:var(--tx2)">' + place + '</span>' : '') +
         '</div>' +
@@ -2403,6 +2428,7 @@ function c4BuildRowsHtml(orders) {
           '<span style="font-size:12px;font-weight:500;flex-shrink:0">' + nameDisplay + '</span>' +
           '<span style="font-size:11px;color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + pName + '</span>' +
         '</div>' +
+        cancelReasonHtml +
         (order.tracking_no ? '<div style="margin-top:3px"><span style="font-size:10px;background:var(--gl);color:var(--green);border:1px solid var(--green);border-radius:4px;padding:1px 6px;font-family:\'JetBrains Mono\',monospace">' + (order.courier_name ? order.courier_name + ' · ' : '') + order.tracking_no + '</span></div>' : '') +
       '</div></div>';
   }).join('');
@@ -2411,9 +2437,10 @@ function c4BuildRowsHtml(orders) {
 // 선택 상태 UI만 갱신 (스크롤/포커스 유지)
 function c4UpdateSelectionUI() {
   const visible = c4SearchFilteredOrders();
-  const allChecked = visible.length > 0 && visible.every(o => C4Panel.checkedIds.has(o.order_id));
+  const selectableVisible = visible.filter(o => !isCancelPending(o) && !isCancelDone(o));
+  const allChecked = selectableVisible.length > 0 && selectableVisible.every(o => C4Panel.checkedIds.has(o.order_id));
   const selAll = document.getElementById('c4-sel-all');
-  if (selAll) { selAll.checked = allChecked; selAll.disabled = visible.length === 0; }
+  if (selAll) { selAll.checked = allChecked; selAll.disabled = selectableVisible.length === 0; }
   const selCount = document.getElementById('c4-sel-count');
   if (selCount) selCount.textContent = C4Panel.checkedIds.size + '건 선택';
   const confirmBtn = document.getElementById('c4-confirm-btn');
@@ -2451,21 +2478,33 @@ function renderC4OrderPanel() {
   const statusTabs = currentPlatform === 'toss' ? TOSS_STATUS_TABS : C4_STATUS_TABS;
   const tabsHtml = statusTabs.map(tab => {
     const cnt = C4Panel.orders.filter(o => c4OrderStatus(o) === tab).length;
-    return '<button class="order-status-tab' + (tab === C4Panel.activeTab ? ' active' : '') + '" onclick="c4SetTab(\'' + tab + '\')">' +
-      tab + '<span class="o-tab-cnt">' + cnt + '</span></button>';
+    const isCancelPendingTab = tab === '취소요청';
+    const isCancelDoneTab = tab === '취소완료';
+    const tabColor = (isCancelPendingTab && cnt > 0) ? ' style="color:var(--red)"' : (isCancelDoneTab ? ' style="color:var(--tx3)"' : '');
+    const cntStyle = (isCancelPendingTab && cnt > 0) ? ' style="background:var(--red);color:#fff"' : '';
+    return '<button class="order-status-tab' + (tab === C4Panel.activeTab ? ' active' : '') + '"' + tabColor + ' onclick="c4SetTab(\'' + tab + '\')">' +
+      tab + '<span class="o-tab-cnt"' + cntStyle + '>' + cnt + '</span></button>';
   }).join('');
 
   const visible = c4SearchFilteredOrders();
-  const allChecked = visible.length > 0 && visible.every(o => C4Panel.checkedIds.has(o.order_id));
+  const selectableVisible = visible.filter(o => !isCancelPending(o) && !isCancelDone(o));
+  const allChecked = selectableVisible.length > 0 && selectableVisible.every(o => C4Panel.checkedIds.has(o.order_id));
+  const cancelExcludedCount = visible.length - selectableVisible.length;
+  const cancelInfoHtml = cancelExcludedCount > 0
+    ? '<div style="font-size:11px;color:var(--tx3);padding:6px 12px;background:var(--sur2);border-bottom:1px solid var(--bdr)">' +
+        '취소 주문 ' + cancelExcludedCount + '건은 선택 및 발송처리에서 제외됩니다.' +
+      '</div>'
+    : '';
 
   panel.innerHTML =
     '<div class="order-status-tabs" style="flex-shrink:0">' + tabsHtml + '</div>' +
     '<div class="order-list-hdr">' +
-      '<input type="checkbox" class="o-chk" id="c4-sel-all"' + (allChecked ? ' checked' : '') + (visible.length ? '' : ' disabled') + ' onchange="c4SelectAll(this.checked)">' +
+      '<input type="checkbox" class="o-chk" id="c4-sel-all"' + (allChecked ? ' checked' : '') + (selectableVisible.length ? '' : ' disabled') + ' onchange="c4SelectAll(this.checked)">' +
       '<label for="c4-sel-all" style="cursor:pointer">전체선택</label>' +
       '<input type="text" id="c4-search-input" autocomplete="off" placeholder="상품명 검색 (예: 날계, 굽계)" value="' + C4Panel.searchTerm.replace(/"/g, '&quot;') + '" oninput="C4Panel.searchTerm=this.value;c4FilterBody()" style="margin-left:8px;flex:1;min-width:0;max-width:200px;background:var(--sur2);border:1px solid var(--bdr);border-radius:5px;padding:3px 8px;font-size:11px;color:var(--tx1);outline:none">' +
       '<span id="c4-sel-count" style="margin-left:auto;font-size:11px;color:var(--tx3);white-space:nowrap">' + C4Panel.checkedIds.size + '건 선택</span>' +
     '</div>' +
+    cancelInfoHtml +
     '<div class="order-list-body">' + c4BuildRowsHtml(visible) + '</div>' +
     '<button id="c4-confirm-btn" class="btn btn-gold btn-full" style="margin-top:12px;flex-shrink:0" onclick="c4DoConfirm()">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg>' +
@@ -2473,8 +2512,14 @@ function renderC4OrderPanel() {
 }
 
 function c4SetTab(tab) { C4Panel.activeTab = tab; C4Panel.searchTerm = ''; renderC4OrderPanel(); }
-function c4RowClick(oid) { c4CheckOrder(oid, !C4Panel.checkedIds.has(oid)); }
+function c4RowClick(oid) {
+  const order = C4Panel.orders.find(o => o.order_id === oid);
+  if (order && (isCancelPending(order) || isCancelDone(order))) return;
+  c4CheckOrder(oid, !C4Panel.checkedIds.has(oid));
+}
 function c4CheckOrder(oid, checked) {
+  const order = C4Panel.orders.find(o => o.order_id === oid);
+  if (order && (isCancelPending(order) || isCancelDone(order))) return; // 취소 주문은 선택 불가
   if (checked) C4Panel.checkedIds.add(oid); else C4Panel.checkedIds.delete(oid);
   c4PrepareOrderData();
   // DOM 직접 토글 — 스크롤 위치 유지
@@ -2487,11 +2532,14 @@ function c4CheckOrder(oid, checked) {
   c4UpdateSelectionUI();
 }
 function c4SelectAll(checked) {
-  c4SearchFilteredOrders().forEach(o => checked ? C4Panel.checkedIds.add(o.order_id) : C4Panel.checkedIds.delete(o.order_id));
+  c4SearchFilteredOrders().filter(o => !isCancelPending(o) && !isCancelDone(o)).forEach(o => checked ? C4Panel.checkedIds.add(o.order_id) : C4Panel.checkedIds.delete(o.order_id));
   c4PrepareOrderData();
-  // 모든 보이는 row DOM 직접 토글 — 스크롤 위치 유지
+  // 모든 보이는 row DOM 직접 토글 — 스크롤 위치 유지 (취소 주문 제외)
   document.querySelectorAll('#c4-order-panel-body .order-row[data-oid]').forEach(row => {
-    const isChecked = C4Panel.checkedIds.has(row.getAttribute('data-oid'));
+    const oid = row.getAttribute('data-oid');
+    const order = C4Panel.orders.find(o => o.order_id === oid);
+    if (order && (isCancelPending(order) || isCancelDone(order))) return;
+    const isChecked = C4Panel.checkedIds.has(oid);
     row.classList.toggle('chk-sel', isChecked);
     const cb = row.querySelector('.o-chk');
     if (cb) cb.checked = isChecked;
