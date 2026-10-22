@@ -590,6 +590,11 @@ select.modal-sel option{background:var(--sur2);}
 .c4-right-panel .upload-zone p{margin:0!important}
 .c4-right-panel .upload-zone small{grid-column:2;margin:0!important}
 .c4-right-panel .step-block > div[style*="padding"]{padding:8px 12px!important;margin-bottom:10px!important;font-size:12px}
+
+.c4-right-panel{display:flex!important;flex-direction:column;padding:20px 16px!important}
+.c4-right-panel > .step-block:last-of-type{flex:1 1 auto;display:flex;flex-direction:column;margin-bottom:0!important}
+.c4-right-panel > .step-block:last-of-type .field-group:has(.upload-zone){flex:1 1 auto;display:flex;flex-direction:column;margin-bottom:0!important}
+.c4-right-panel > .step-block:last-of-type .upload-zone{flex:1 1 auto;min-height:52px!important;grid-template-columns:auto auto;align-content:center;justify-content:center}
 </style>
 </head>
 <body>
