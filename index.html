@@ -2017,7 +2017,7 @@ async function fetchDomeConsignOrders() {
 // 도매꾹/도매매 원가 비교: 주문 수량으로 두 곳 원가를 계산해 더 싼 쪽을 미리 체크 (주군이 바꾸면 그대로 둠)
 const DC_QUOTE_URL = 'https://n8n.wonflowai.com/webhook/caos-item-markets';
 async function domeConsignLoadQuotes() {
-  const targets = DomeConsign.orders.filter(o => !domeConsignIsCancelRequested(o) && !DomeConsign.quote[o.order_id]);
+  const targets = DomeConsign.orders.filter(o => !domeConsignIsCancelRequested(o) && !DomeConsign.quote[o.order_id] && !['배송중','배송완료','배송대기'].includes(domeConsignOrderStatus(o)));
   for (const order of targets) {
     const items = (order.items || []).filter(i => (i.custom_product_code || '').startsWith('도매매 '));
     if (!items.length) continue;
@@ -2042,7 +2042,7 @@ async function domeConsignLoadQuotes() {
 }
 function domeConsignQuoteHtml(oid) {
   const q = DomeConsign.quote[oid];
-  if (!q) return '<div style="font-size:11px;color:var(--tx3);margin-top:2px">원가 비교 중…</div>';
+  if (!q) { const o = DomeConsign.orders.find(x => x.order_id === oid); return (o && ['배송중','배송완료','배송대기'].includes(domeConsignOrderStatus(o))) ? '' : '<div style="font-size:11px;color:var(--tx3);margin-top:2px">원가 비교 중…</div>'; }
   if (q.fail) return '<div style="font-size:11px;color:var(--tx3);margin-top:2px">원가 비교 실패 · 직접 선택</div>';
   const w = v => v ? v.total.toLocaleString() + '원' + (v.extra > 0 ? '(' + v.extra + '개 더)' : '') : '판매 안 함';
   const isDome = !!DomeConsign.domeToggle[oid];
