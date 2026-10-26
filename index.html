@@ -1842,11 +1842,11 @@ function isCancelPending(order){ if(isCancelDone(order)) return false; return (o
 
 // ── 도매꾹(위탁) 탭 ──
 const DOME_CONSIGN_STATUS_TABS = ['취소요청', '취소완료', '마켓발주전', '배송준비중', '배송대기', '배송중', '배송완료'];
-let DomeConsign = { bizId: null, orders: [], loading: false, error: null, activeTab: '마켓발주전', checkedIds: new Set(), domeToggle: {} };
+let DomeConsign = { bizId: null, orders: [], loading: false, error: null, activeTab: '마켓발주전', checkedIds: new Set(), domeToggle: {}, quote: {}, manual: {} };
 
 function onDomeConsignBizChange() {
   DomeConsign.bizId = document.getElementById('dcon-biz-sel').value || null;
-  DomeConsign.orders = []; DomeConsign.checkedIds = new Set(); DomeConsign.domeToggle = {};
+  DomeConsign.orders = []; DomeConsign.checkedIds = new Set(); DomeConsign.domeToggle = {}; DomeConsign.quote = {}; DomeConsign.manual = {};
   DomeConsign.error = null; DomeConsign.loading = false;
   renderDomeConsignPanel();
   if (DomeConsign.bizId) fetchDomeConsignOrders();
@@ -1949,6 +1949,7 @@ function renderDomeConsignPanel() {
           '<span style="font-size:11px;color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + pName + '</span>' +
         '</div>' +
         cancelReasonHtml +
+        domeConsignQuoteHtml(order.order_id) +
       '</div>' +
       '<div class="dome-tog-wrap' + (isDome ? ' is-dome' : '') + '" id="' + togId + '" onclick="event.stopPropagation()">' +
         '<input type="checkbox" id="' + togId + '-chk" ' + (isDome ? 'checked' : '') + ' onchange="domeConsignToggleDome(\'' + oid + '\',this.checked,\'' + togId + '\')">' +
@@ -1978,9 +1979,13 @@ function domeConsignSelectAll(checked) {
   renderDomeConsignPanel();
 }
 function domeConsignToggleDome(oid, isDome, togId) {
-  DomeConsign.domeToggle[oid] = isDome;
+  DomeConsign.domeToggle[oid] = isDome; DomeConsign.manual[oid] = true;
+  const qd = (DomeConsign.quote[oid] || {}).dome;
+  if (isDome && qd === null) toast('이 상품은 도매꾹에서 팔지 않습니다', 'err');
+  else if (isDome && qd && qd.extra > 0) toast('도매꾹은 ' + qd.buyQty + '개부터라 ' + qd.extra + '개가 더 발주됩니다', 'err');
   const wrap = document.getElementById(togId);
   if (wrap) { if (isDome) wrap.classList.add('is-dome'); else wrap.classList.remove('is-dome'); }
+  if (DomeConsign.quote[oid]) renderDomeConsignPanel();
 }
 
 async function fetchDomeConsignOrders() {
@@ -2000,12 +2005,51 @@ async function fetchDomeConsignOrders() {
     );
     DomeConsign.loading = false;
     renderDomeConsignPanel();
+    domeConsignLoadQuotes();
     toast('도매매 위탁 주문 ' + DomeConsign.orders.length + '건 불러옴 (전체 ' + allOrders.length + '건 중)', 'ok');
   } catch (e) {
     DomeConsign.loading = false; DomeConsign.error = e.message;
     renderDomeConsignPanel();
     toast('불러오기 실패: ' + e.message, 'err');
   }
+}
+
+// 도매꾹/도매매 원가 비교: 주문 수량으로 두 곳 원가를 계산해 더 싼 쪽을 미리 체크 (주군이 바꾸면 그대로 둠)
+const DC_QUOTE_URL = 'https://n8n.wonflowai.com/webhook/caos-item-markets';
+async function domeConsignLoadQuotes() {
+  const targets = DomeConsign.orders.filter(o => !domeConsignIsCancelRequested(o) && !DomeConsign.quote[o.order_id]);
+  for (const order of targets) {
+    const items = (order.items || []).filter(i => (i.custom_product_code || '').startsWith('도매매 '));
+    if (!items.length) continue;
+    const res = [];
+    for (const it of items) {
+      const itemNo = (it.custom_product_code || '').replace(/^도매매\s+/, '').trim();
+      try {
+        const r = await fetch(DC_QUOTE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itemNo, qty: parseInt(it.quantity, 10) || 1 }) });
+        const j = await r.json(); if (j && j.ok) res.push(j.quote);
+      } catch (_) {}
+    }
+    if (!res.length) { DomeConsign.quote[order.order_id] = { fail: true }; continue; }
+    // 한 주문 = 한 시장으로 발주되므로 상품별 원가를 합산해 비교
+    const sum = k => res.every(q => q[k]) ? res.reduce((a, q) => ({ total: a.total + q[k].total, extra: a.extra + q[k].extra, buyQty: a.buyQty + q[k].buyQty }), { total: 0, extra: 0, buyQty: 0 }) : null;
+    const qd = sum('dome'), qs = sum('supply');
+    let pick = res.length === 1 ? res[0].pick : (qs && qd && qd.extra === 0 && qd.total < qs.total ? 'dome' : qs ? 'supply' : qd ? 'dome' : null);
+    const reason = res.length === 1 ? res[0].reason : (pick === 'dome' ? '도매꾹 합계가 더 쌉니다' : '도매매 기준');
+    DomeConsign.quote[order.order_id] = { dome: qd, supply: qs, pick, reason };
+    if (!DomeConsign.manual[order.order_id] && pick) DomeConsign.domeToggle[order.order_id] = pick === 'dome';
+    renderDomeConsignPanel();
+  }
+}
+function domeConsignQuoteHtml(oid) {
+  const q = DomeConsign.quote[oid];
+  if (!q) return '<div style="font-size:11px;color:var(--tx3);margin-top:2px">원가 비교 중…</div>';
+  if (q.fail) return '<div style="font-size:11px;color:var(--tx3);margin-top:2px">원가 비교 실패 · 직접 선택</div>';
+  const w = v => v ? v.total.toLocaleString() + '원' + (v.extra > 0 ? '(' + v.extra + '개 더)' : '') : '판매 안 함';
+  const isDome = !!DomeConsign.domeToggle[oid];
+  const mismatch = q.pick && (q.pick === 'dome') !== isDome;
+  return '<div style="font-size:11px;margin-top:2px;color:' + (mismatch ? 'var(--red)' : 'var(--tx2)') + '">' +
+    '도매매 ' + w(q.supply) + ' · 도매꾹 ' + w(q.dome) + ' → <b>추천 ' + (q.pick === 'dome' ? '도매꾹' : q.pick === 'supply' ? '도매매' : '없음') + '</b> · ' + (q.reason || '') +
+    (mismatch ? ' · 추천과 다르게 선택됨' : '') + '</div>';
 }
 
 async function domeConsignBuildOrderRows() {
