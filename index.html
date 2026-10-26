@@ -138,6 +138,9 @@ input[type=text]:focus{border-color:var(--gold);}
 ::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:3px;}
 
 /* ── 클레임관리 섹션 ── */
+#claim-detail-panel input, #claim-detail-panel select { background:var(--sur2); border:1px solid var(--bdr); color:var(--tx); border-radius:var(--rs); padding:8px 10px; font:inherit; font-size:13px; }
+#claim-detail-panel input:focus, #claim-detail-panel select:focus { outline:none; border-color:var(--gold); }
+#claim-detail-panel input[type=date] { color-scheme:dark; }
 #section-invoice{display:flex;flex-direction:column;height:calc(100vh - 52px);}
 #section-claim{display:none;width:100%;min-height:calc(100vh - 52px);}
 .claim-page{width:100%;overflow-y:auto;padding:24px;}
@@ -949,6 +952,9 @@ select.modal-sel option{background:var(--sur2);}
         </button>
         <button class="order-status-tab" data-type="refund" onclick="onClaimTypeTab(this)">
           환불 <span class="o-tab-cnt" id="claim-cnt-refund">0</span>
+        </button>
+        <button class="order-status-tab" data-type="manual" onclick="onClaimTypeTab(this)" title="회수 없는 반품·파손 부분 환불·직권 반품처럼 카페24에 금액이 정확히 안 넘어오는 손실">
+          손실·차감 직접 입력 <span class="o-tab-cnt" id="claim-cnt-manual">0</span>
         </button>
       </div>
 
@@ -3100,7 +3106,10 @@ let claimState = {
   refunds: [],      // refund-list 결과
   activeType: 'cancellation', // cancellation | exchange | return | refund
   loading: false,
-  selectedItem: null
+  selectedItem: null,
+  manual: [],        // 직접 입력한 손실·차감 (경영지원 순매출·이익에서 차감)
+  manualMonth: null,
+  prefill: null
 };
 
 function renderClaimBizSelect() {
@@ -3123,7 +3132,8 @@ function onClaimBizChange() {
   claimState.selectedItem = null;
   renderClaimDetailPanel(null);
   if (claimState.biz) {
-    claimRefreshAll();
+    claimRefreshAll(); loadManualClaims();
+    if (claimState.activeType === 'manual') renderManualForm();
   } else {
     updateClaimTabCounts();
     renderClaimListBody();
@@ -3135,9 +3145,106 @@ function onClaimTypeTab(btn) {
   btn.classList.add('active');
   claimState.activeType = btn.dataset.type;
   claimState.selectedItem = null;
+  const hdr = document.getElementById('claim-table-header'); if (hdr) hdr.style.display = claimState.activeType === 'manual' ? 'none' : 'grid';
+  if (claimState.activeType === 'manual') { if (claimState.biz) loadManualClaims(); renderManualForm(); renderClaimListBody(); return; }
+  claimState.prefill = null;
   renderClaimDetailPanel(null);
   renderClaimListBody();
 }
+
+// ── 손실·차감 직접 입력 (경영지원으로 넘어감) ──
+const _origClaimDetail = renderClaimDetailPanel;
+renderClaimDetailPanel = function (item, ...rest) {
+  _origClaimDetail(item, ...rest);
+  if (!item || claimState.activeType === 'manual') return;
+  const el = document.getElementById('claim-detail-panel');
+  if (el) el.insertAdjacentHTML('beforeend', `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--bdr)"><div style="font-size:11.5px;color:var(--tx3);margin-bottom:8px">회수 없이 처리했거나, 일부만 환불했거나, 쿠팡이 직권 반품한 건이면 손실 금액을 따로 적어 두세요.</div><button class="btn btn-sm" style="width:100%" onclick="manualFromClaim()">이 건 손실 금액 직접 입력 →</button></div>`);
+};
+const MANUAL_TYPES = ['회수 없는 반품', '파손 부분 환불', '쿠팡 직권 반품', '반품 배송비 부담', '기타 손실'];
+const MANUAL_MARKETS = ['쿠팡', '네이버', 'G마켓', '옥션', '11번가', '롯데ON', '토스쇼핑', '기타'];
+const claimBizName = () => (CLAIM_BIZ_LIST.find(b => b.prefix === claimState.biz) || {}).name || '';
+const thisMonth = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 7);
+async function fetchManual(month) {
+  const j = await fetch(`${N8N_BASE}/caos-settle-get?orders=1&month=${month}`, { cache: 'no-store' }).then(r => r.json());
+  const it = (j.items || []).find(x => x.biz === claimBizName() && x.platform === 'manual' && x.kind === 'claims');
+  return (it && it.orders) || [];
+}
+async function loadManualClaims() {
+  const month = claimState.manualMonth || (claimState.manualMonth = thisMonth());
+  try { claimState.manual = await fetchManual(month); } catch (_) { claimState.manual = []; toast('직접 입력 목록을 불러오지 못했습니다', 'err'); }
+  const c = document.getElementById('claim-cnt-manual'); if (c) c.textContent = claimState.manual.length;
+  if (claimState.activeType === 'manual') renderClaimListBody();
+}
+async function saveManualClaims(month, list) {
+  const total = list.reduce((a, x) => a + (Number(x.amount) || 0), 0);
+  const r = await fetch(`${N8N_BASE}/caos-settle-save`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ month, biz: claimBizName(), platform: 'manual', kind: 'claims', file: '주문배송 직접 입력', summary: { total, count: list.length }, orders: list }) }).then(r => r.json());
+  if (!r.ok) throw new Error(r.msg || '저장 실패');
+}
+function renderManualList(el) {
+  const m = claimState.manualMonth || thisMonth();
+  const months = []; for (let i = 0; i < 6; i++) { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i); months.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')); }
+  const total = claimState.manual.reduce((a, x) => a + (Number(x.amount) || 0), 0);
+  const G = 'display:grid;grid-template-columns:90px 80px 150px 1fr 130px 60px 100px 50px;padding:8px 14px;border-bottom:1px solid var(--bdr)';
+  el.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bdr);background:var(--sur2)">
+      <span style="font-size:12px;color:var(--tx3)">월</span>
+      <select class="biz-select" style="max-width:130px;flex:unset" onchange="claimState.manualMonth=this.value;loadManualClaims()">${months.map(x => `<option ${x === m ? 'selected' : ''}>${x}</option>`).join('')}</select>
+      <span style="font-size:12px;color:var(--tx2)">${claimState.manual.length}건 · 차감 합계 <b style="color:var(--red)">${total.toLocaleString()}원</b></span>
+      <span style="margin-left:auto;font-size:11px;color:var(--tx3)">경영지원 순매출·이익에서 자동 차감</span></div>
+    ${claimState.manual.length ? `<div style="${G};background:var(--sur2);font-size:12px;color:#bbb;font-weight:600"><div>날짜</div><div>마켓</div><div>주문번호</div><div>상품 · 메모</div><div>유형</div><div style="text-align:right">수량</div><div style="text-align:right">차감 금액</div><div></div></div>` +
+      claimState.manual.slice().sort((a, b) => String(b.date).localeCompare(a.date)).map(x => `<div style="${G};font-size:12.5px;align-items:center">
+        <div>${escHtml(x.date)}</div><div>${escHtml(x.market)}</div><div style="font-family:'JetBrains Mono',monospace;font-size:11.5px">${escHtml(x.orderNo || '-')}</div>
+        <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml((x.product || '') + (x.memo ? ' · ' + x.memo : ''))}">${escHtml(x.product || '-')}${x.memo ? `<span style="color:var(--tx3)"> · ${escHtml(x.memo)}</span>` : ''}</div>
+        <div>${escHtml(x.type)}</div><div style="text-align:right">${escHtml(String(x.qty || ''))}</div><div style="text-align:right;color:var(--red)">-${(Number(x.amount) || 0).toLocaleString()}</div>
+        <div style="text-align:right"><button class="btn btn-sm btn-ghost" title="삭제" onclick="deleteManualClaim('${escHtml(x.id)}')">✕</button></div></div>`).join('')
+      : '<div class="empty-state" style="padding:50px 20px"><p>이 달 직접 입력한 손실·차감이 없습니다</p><small>오른쪽에서 추가하세요</small></div>'}`;
+}
+function renderManualForm() {
+  const el = document.getElementById('claim-detail-panel'); if (!el) return;
+  if (!claimState.biz) { el.innerHTML = '<div class="empty-state" style="padding:60px 20px"><p>사업자를 먼저 선택하세요</p></div>'; return; }
+  const p = claimState.prefill || {}; const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+  const inp = 'style="width:100%;margin-top:4px"';
+  el.innerHTML = `<div><div style="font-size:14px;font-weight:600;margin-bottom:4px">손실·차감 추가 · ${escHtml(claimBizName())}</div>
+    <div style="font-size:11.5px;color:var(--tx3);margin-bottom:14px;line-height:1.6">회수 없는 반품, 파손 개수만큼 부분 환불, 쿠팡 직권 반품처럼 카페24에 금액이 정확히 안 넘어오는 건을 적습니다. 저장하면 경영지원 순매출·이익에서 차감됩니다.</div>
+    <label class="lbl">날짜 (처리일)</label><input type="date" id="mc-date" value="${escHtml(p.date || today)}" ${inp}>
+    <label class="lbl" style="margin-top:10px">유형</label><select id="mc-type" ${inp}>${MANUAL_TYPES.map(t => `<option ${t === p.type ? 'selected' : ''}>${t}</option>`).join('')}</select>
+    <label class="lbl" style="margin-top:10px">마켓</label><select id="mc-market" ${inp}>${MANUAL_MARKETS.map(t => `<option ${t === p.market ? 'selected' : ''}>${t}</option>`).join('')}</select>
+    <label class="lbl" style="margin-top:10px">주문번호 (선택)</label><input id="mc-order" value="${escHtml(p.orderNo || '')}" placeholder="마켓 주문번호" ${inp}>
+    <label class="lbl" style="margin-top:10px">상품명</label><input id="mc-product" value="${escHtml(p.product || '')}" placeholder="예) 날계 무항생제 특란 30구" ${inp}>
+    <div style="display:flex;gap:8px;margin-top:10px"><div style="flex:1"><label class="lbl">수량</label><input id="mc-qty" type="number" min="0" value="${escHtml(String(p.qty || ''))}" ${inp}></div>
+      <div style="flex:2"><label class="lbl">차감(손실) 금액</label><input id="mc-amount" inputmode="numeric" value="${p.amount ? Number(p.amount).toLocaleString() : ''}" placeholder="예) 14,900" ${inp}></div></div>
+    <label class="lbl" style="margin-top:10px">메모 (선택)</label><input id="mc-memo" value="${escHtml(p.memo || '')}" placeholder="예) 2구 파손, 사진 받음" ${inp}>
+    <button class="btn btn-gold" style="width:100%;margin-top:16px" onclick="addManualClaim(this)">추가</button></div>`;
+}
+async function addManualClaim(btn) {
+  const v = id => (document.getElementById(id).value || '').trim();
+  const amount = Number(v('mc-amount').replace(/[^0-9]/g, '')); const date = v('mc-date');
+  if (!date || !amount) { toast('날짜와 금액을 입력하세요', 'err'); return; }
+  const month = date.slice(0, 7);
+  btn.disabled = true; btn.textContent = '저장 중…';
+  try {
+    const list = await fetchManual(month);  // 저장 직전 최신 목록을 다시 읽어 덮어쓰기 방지
+    const entry = { id: 'M' + Date.now(), date, month, type: v('mc-type'), market: v('mc-market'), orderNo: v('mc-order'), product: v('mc-product'), qty: Number(v('mc-qty')) || '', amount, memo: v('mc-memo') };
+    await saveManualClaims(month, list.concat([entry]));
+    claimState.manualMonth = month; claimState.prefill = null;
+    toast('손실·차감을 저장했습니다 (경영지원 반영)', 'ok');
+    await loadManualClaims(); renderManualForm();
+  } catch (e) { toast('저장 실패: ' + e.message, 'err'); btn.disabled = false; btn.textContent = '추가'; }
+}
+async function deleteManualClaim(id) {
+  const x = claimState.manual.find(m => m.id === id); if (!x) return;
+  if (!confirm(`${x.date} ${x.type} ${Number(x.amount).toLocaleString()}원 항목을 지울까요?`)) return;
+  const month = claimState.manualMonth || thisMonth();
+  try { const list = await fetchManual(month); await saveManualClaims(month, list.filter(m => m.id !== id)); toast('삭제했습니다', 'ok'); await loadManualClaims(); }
+  catch (e) { toast('삭제 실패: ' + e.message, 'err'); }
+}
+function manualFromClaim() {  // 자동 클레임 상세에서 바로 손실 입력으로
+  const c = claimState.selectedItem || {};
+  claimState.prefill = { date: String(c.claim_date || c.refund_date || '').slice(0, 10) || undefined, orderNo: c.market_order_no || c.order_id || '', product: c.product_name || '',
+    market: ({ coupang: '쿠팡', shopn: '네이버', naver: '네이버', sk11st: '11번가', gmarket: 'G마켓', auction: '옥션', lotteon: '롯데ON' })[c.market_id] || '기타', type: '회수 없는 반품' };
+  const btn = document.querySelector('#section-claim .order-status-tab[data-type="manual"]'); if (btn) onClaimTypeTab(btn);
+}
+
 
 async function claimRefreshAll() {
   if (!claimState.biz) { toast('사업자를 선택하세요', 'err'); return; }
@@ -3272,6 +3379,7 @@ function renderClaimListBody() {
     return;
   }
 
+  if (claimState.activeType === 'manual') { renderManualList(el); return; }
   const items = claimFiltered();
   if (!items.length) {
     el.innerHTML = '<div class="empty-state" style="padding:60px 20px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg><p>해당 유형의 클레임이 없습니다</p></div>';
