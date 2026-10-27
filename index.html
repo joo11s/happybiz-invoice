@@ -1395,7 +1395,6 @@ function onC4BizChange() {
   if (C4.bizId) {
     if (currentPlatform === 'toss') { fetchC4Orders(); return; }
     const selBiz = DB.businesses.find(b => b.id === C4.bizId);
-    if (selBiz && selBiz.name === '소울스토어') { fetchC4Orders(); return; }
   }
   renderC4OrderPanel();
 }
@@ -1636,12 +1635,11 @@ function renderMatchResult(matched, failed) {
 // 사업자 bizId → webhook용 코드 매핑
 function getBizWebhookCode(bizId) {
   const biz = DB.businesses.find(b => b.id === bizId);
-  if (!biz) return 'soul';
+  if (!biz) return 'j1';
   const name = biz.name;
-  if (name.includes('소울')) return 'soul';
   if (name.includes('제이원')) return 'j1';
   if (name.includes('행복')) return 'happy';
-  return 'soul';
+  return 'j1';  // 소울스토어는 운영 종료 — 알 수 없는 사업자는 제이원으로
 }
 
 // 택배사 courierId → 카페24 배송사 코드 매핑
@@ -2000,7 +1998,7 @@ async function fetchDomeConsignOrders() {
   renderDomeConsignPanel();
   try {
     const biz = DB.businesses.find(b => b.id === DomeConsign.bizId);
-    const bizCode = { '소울스토어':'soul', '제이원투몰':'j1', '행복산업':'happy' }[biz?.name] || 'soul';
+    const bizCode = { '제이원투몰':'j1', '행복산업':'happy' }[biz?.name] || 'j1';
     const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-orders-list?biz=' + bizCode);
     if (!res.ok) throw new Error('서버 오류: ' + res.status);
     const json = await res.json();
@@ -2419,7 +2417,7 @@ async function fetchC4Orders() {
       if (!res.ok) throw new Error('서버 오류: ' + res.status);
       json = await res.json();
     } else {
-      const c4BizCode = { '소울스토어':'soul', '제이원투몰':'j1', '행복산업':'happy' }[DB.businesses.find(b => b.id === C4.bizId)?.name] || 'soul';
+      const c4BizCode = { '제이원투몰':'j1', '행복산업':'happy' }[DB.businesses.find(b => b.id === C4.bizId)?.name] || 'j1';
       const res = await fetch('https://n8n.wonflowai.com/webhook/soulkit-orders-list?biz=' + c4BizCode);
       if (!res.ok) throw new Error('서버 오류: ' + res.status);
       json = await res.json();
@@ -2652,7 +2650,7 @@ function c4PrepareOrderData() {
 
   C4._panelOrderHeaders = headers;
   C4._panelOrderData = rows;
-  C4._panelOrderName = 'API_소울스토어_' + selected.length + '건';
+  C4._panelOrderName = 'API_' + ((DB.businesses.find(b => b.id === C4.bizId) || {}).name || '주문') + '_' + selected.length + '건';
 }
 
 async function c4DoConfirm() {
@@ -3095,13 +3093,12 @@ const N8N_BASE = 'https://n8n.wonflowai.com/webhook';
 
 // 사업자 고정 목록 (biz 프리픽스 = 웹훅 치환값)
 const CLAIM_BIZ_LIST = [
-  { prefix: 'soul',     name: '소울스토어' },
   { prefix: 'jone',     name: '제이원투몰' },
   { prefix: 'happybiz', name: '행복산업' }
 ];
 
 let claimState = {
-  biz: null,        // 'soul' | 'jone' | 'happybiz'
+  biz: null,        // 'jone' | 'happybiz'
   claims: [],       // claims-detect 전체 결과
   refunds: [],      // refund-list 결과
   activeType: 'cancellation', // cancellation | exchange | return | refund
